@@ -1,3 +1,2 @@
-playwright
-openpyxl
-pandas
+requests
+PyNaCl

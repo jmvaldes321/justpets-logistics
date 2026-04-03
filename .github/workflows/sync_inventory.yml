@@ -1,4 +1,4 @@
-name: Sync Inventario Bodega
+name: Sync Inventario ML
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
     - cron: "0 3 * * *"
     - cron: "0 11 * * *"
     - cron: "0 19 * * *"
-  workflow_dispatch: # Permite ejecutar manualmente desde GitHub
+  workflow_dispatch:
 
 jobs:
   sync:
@@ -24,23 +24,16 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencias
-        run: |
-          pip install -r scripts/requirements.txt
-          playwright install chromium --with-deps
+        run: pip install -r scripts/requirements.txt
 
       - name: Ejecutar sync de inventario
         env:
-          LOGYSTIX_USER: ${{ secrets.LOGYSTIX_USER }}
-          LOGYSTIX_PASSWORD: ${{ secrets.LOGYSTIX_PASSWORD }}
+          ML_CLIENT_ID:     ${{ secrets.ML_CLIENT_ID }}
+          ML_CLIENT_SECRET: ${{ secrets.ML_CLIENT_SECRET }}
+          ML_USER_ID:       ${{ secrets.ML_USER_ID }}
+          ML_REFRESH_TOKEN: ${{ secrets.ML_REFRESH_TOKEN }}
+          GITHUB_PAT:       ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/sync_inventory.py
-
-      - name: Subir screenshots de debug (si hay error)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: debug-screenshots
-          path: "*.png"
-          retention-days: 3
 
       - name: Commit y push data.json actualizado
         run: |
@@ -50,6 +43,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "Sin cambios en inventario"
           else
-            git commit -m "chore: sync inventario $(date +'%Y-%m-%d %H:%M') CL"
+            git commit -m "chore: sync inventario ML $(date +'%Y-%m-%d %H:%M') CL"
             git push
           fi
