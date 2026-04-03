@@ -246,64 +246,78 @@ async def download_report(download_dir: str) -> str:
 
 def parse_inventory_excel(path: str) -> dict:
     """
-    Lee el Excel descargado y retorna un dict {ean: cantidad}.
-    Busca columnas que contengan SKU/EAN y cantidad/stock/inventario.
+    Lee el Excel descargado y retorna un dict {sku: {cantidad, nombre, peso, ...}}.
+    Captura todas las columnas disponibles para poder agregar SKUs nuevos.
     """
     wb = openpyxl.load_workbook(path, data_only=True)
     ws = wb.active
 
     headers = []
-    sku_col = None
-    qty_col = None
-
-    for i, row in enumerate(ws.iter_rows(values_only=True)):
+    for row in ws.iter_rows(values_only=True):
         if any(row):
             headers = [str(c).strip().lower() if c else "" for c in row]
             break
 
-    sku_keywords = ["ean", "sku", "codigo", "código", "barcode", "cod"]
-    qty_keywords = ["cantidad", "stock", "inventario", "qty", "unidades", "disponible", "saldo"]
+    def find_col(keywords):
+        for idx, h in enumerate(headers):
+            if any(k in h for k in keywords):
+                return idx
+        return None
 
-    for idx, h in enumerate(headers):
-        if sku_col is None and any(k in h for k in sku_keywords):
-            sku_col = idx
-        if qty_col is None and any(k in h for k in qty_keywords):
-            qty_col = idx
+    sku_col  = find_col(["ean", "sku", "codigo", "código", "barcode", "cod"])
+    qty_col  = find_col(["cantidad", "stock", "inventario", "qty", "unidades", "disponible", "saldo"])
+    name_col = find_col(["nombre", "producto", "descripcion", "descripción", "name"])
+    peso_col = find_col(["peso", "weight", "kg"])
 
     if sku_col is None or qty_col is None:
         print(f"Headers encontrados: {headers}")
-        raise RuntimeError(
-            f"No se encontraron columnas de SKU/EAN o cantidad. Headers: {headers}"
-        )
+        raise RuntimeError(f"No se encontraron columnas SKU o cantidad. Headers: {headers}")
 
-    print(f"→ Columna SKU: '{headers[sku_col]}' (col {sku_col}), Cantidad: '{headers[qty_col]}' (col {qty_col})")
+    print(f"→ SKU: col {sku_col} ('{headers[sku_col]}')  |  Cantidad: col {qty_col} ('{headers[qty_col]}')")
+    if name_col is not None: print(f"→ Nombre: col {name_col} ('{headers[name_col]}')")
+    if peso_col is not None: print(f"→ Peso: col {peso_col} ('{headers[peso_col]}')")
 
     inventory = {}
     for row in ws.iter_rows(min_row=2, values_only=True):
         sku = row[sku_col]
-        qty = row[qty_col]
         if sku is None:
             continue
-        sku_str = str(sku).strip().split(".")[0]  # Eliminar decimales si EAN viene como float
+        sku_str = str(sku).strip().split(".")[0]
+        qty = row[qty_col]
         qty_int = int(qty) if isinstance(qty, (int, float)) else 0
-        inventory[sku_str] = qty_int
+
+        entry = {"cantidad": qty_int}
+        if name_col is not None and row[name_col]:
+            entry["nombre"] = str(row[name_col]).strip()
+        if peso_col is not None and isinstance(row[peso_col], (int, float)):
+            entry["peso_kg"] = float(row[peso_col])
+
+        inventory[sku_str] = entry
 
     print(f"✓ {len(inventory)} SKUs parseados del Excel")
     return inventory
 
 
 def update_data_json(inventory: dict):
-    """Actualiza api/data.json con los nuevos stocks y recalcula M3 totales."""
+    """
+    Actualiza api/data.json:
+    - Actualiza inventario y M3 de productos existentes.
+    - Agrega SKUs nuevos que estén en el reporte pero no en data.json.
+    """
     with open(DATA_PATH, "r", encoding="utf-8") as f:
         products = json.load(f)
 
+    existing_skus = {p["sku"] for p in products}
     updated = 0
+    added = 0
     not_found = 0
+
+    # Actualizar productos existentes
     for p in products:
         sku = p["sku"]
         if sku in inventory:
             old_inv = p["inventario"]
-            new_inv = inventory[sku]
+            new_inv = inventory[sku]["cantidad"]
             p["inventario"] = new_inv
             p["m3_totales"] = round(p["m3_producto"] * new_inv, 6)
             if old_inv != new_inv:
@@ -311,11 +325,30 @@ def update_data_json(inventory: dict):
         else:
             not_found += 1
 
+    # Agregar SKUs nuevos del reporte que no están en data.json
+    for sku, data in inventory.items():
+        if sku not in existing_skus:
+            qty = data["cantidad"]
+            nombre = data.get("nombre", sku)
+            peso = data.get("peso_kg", 0)
+            products.append({
+                "sku": sku,
+                "nombre": nombre,
+                "inventario": qty,
+                "peso_kg": peso,
+                "m3_x_kg": 0,
+                "m3_producto": 0,
+                "m3_totales": 0,
+                "categoria": "SIN CATEGORIA"
+            })
+            added += 1
+
     with open(DATA_PATH, "w", encoding="utf-8") as f:
         json.dump(products, f, ensure_ascii=False)
 
     total_m3 = sum(p["m3_totales"] for p in products)
-    print(f"✓ data.json actualizado: {updated} productos modificados, {not_found} no encontrados en el reporte")
+    print(f"✓ data.json: {updated} actualizados, {added} nuevos agregados, {not_found} no en reporte")
+    print(f"✓ Total SKUs en data.json: {len(products)}")
     print(f"✓ M³ total bodega: {total_m3:.4f}")
 
 
