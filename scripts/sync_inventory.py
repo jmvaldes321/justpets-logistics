@@ -12,6 +12,7 @@ from pathlib import Path
 from datetime import datetime
 
 import openpyxl
+import pandas as pd
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
 
 
@@ -221,22 +222,31 @@ async def download_report(download_dir: str) -> str:
 
 def parse_inventory_excel(path: str) -> dict:
     """
-    Lee el Excel descargado y retorna un dict {sku: {cantidad, nombre, peso, ...}}.
-    Captura todas las columnas disponibles para poder agregar SKUs nuevos.
+    Equivalente a una tabla dinámica clásica sin subtotales:
+    agrupa por SKU y suma las cantidades, ignorando filas de subtotal/total.
     """
-    wb = openpyxl.load_workbook(path, data_only=True)
-    ws = wb.active
+    # Leer el Excel completo con pandas
+    df = pd.read_excel(path, header=None, dtype=str)
 
-    headers = []
-    for row in ws.iter_rows(values_only=True):
-        if any(row):
-            headers = [str(c).strip().lower() if c else "" for c in row]
+    # Encontrar la fila de encabezados (primera fila con datos)
+    header_row = None
+    for i, row in df.iterrows():
+        vals = row.dropna().tolist()
+        if len(vals) >= 2:
+            header_row = i
             break
 
+    if header_row is None:
+        raise RuntimeError("No se encontró fila de encabezados en el Excel")
+
+    df.columns = [str(c).strip().lower() if pd.notna(c) else f"col_{i}" for i, c in enumerate(df.iloc[header_row])]
+    df = df.iloc[header_row + 1:].reset_index(drop=True)
+    print(f"  Headers del Excel: {list(df.columns)}")
+
     def find_col(keywords):
-        for idx, h in enumerate(headers):
-            if any(k in h for k in keywords):
-                return idx
+        for col in df.columns:
+            if any(k in col for k in keywords):
+                return col
         return None
 
     sku_col  = find_col(["ean", "sku", "codigo", "código", "barcode", "cod"])
@@ -245,31 +255,48 @@ def parse_inventory_excel(path: str) -> dict:
     peso_col = find_col(["peso", "weight", "kg"])
 
     if sku_col is None or qty_col is None:
-        print(f"Headers encontrados: {headers}")
-        raise RuntimeError(f"No se encontraron columnas SKU o cantidad. Headers: {headers}")
+        raise RuntimeError(f"No se encontraron columnas SKU/cantidad. Columnas: {list(df.columns)}")
 
-    print(f"→ SKU: col {sku_col} ('{headers[sku_col]}')  |  Cantidad: col {qty_col} ('{headers[qty_col]}')")
-    if name_col is not None: print(f"→ Nombre: col {name_col} ('{headers[name_col]}')")
-    if peso_col is not None: print(f"→ Peso: col {peso_col} ('{headers[peso_col]}')")
+    print(f"→ SKU: '{sku_col}'  |  Cantidad: '{qty_col}'")
+
+    # Limpiar SKU: quitar filas vacías, subtotales y totales generales
+    df[sku_col] = df[sku_col].astype(str).str.strip()
+    df[qty_col] = pd.to_numeric(df[qty_col], errors='coerce').fillna(0)
+
+    # Filtrar filas de subtotal/total: SKU vacío, 'nan', 'total', 'subtotal', etc.
+    mask_valido = (
+        df[sku_col].notna() &
+        ~df[sku_col].isin(['', 'nan', 'none', 'NaN']) &
+        ~df[sku_col].str.lower().str.contains('total|subtotal|suma|grand', na=False)
+    )
+    df = df[mask_valido].copy()
+
+    # Normalizar SKU: quitar decimales (ej. "8436538947630.0" → "8436538947630")
+    df[sku_col] = df[sku_col].str.split('.').str[0]
+
+    # --- TABLA DINÁMICA: agrupar por SKU, sumar cantidad ---
+    pivot = df.groupby(sku_col, as_index=False).agg(
+        cantidad=(qty_col, 'sum'),
+        **({'nombre': (name_col, 'first')} if name_col else {}),
+        **({'peso_kg': (peso_col, 'first')} if peso_col else {}),
+    )
+    pivot['cantidad'] = pivot['cantidad'].astype(int)
 
     inventory = {}
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        sku = row[sku_col]
-        if sku is None:
-            continue
-        sku_str = str(sku).strip().split(".")[0]
-        qty = row[qty_col]
-        qty_int = int(qty) if isinstance(qty, (int, float)) else 0
+    for _, row in pivot.iterrows():
+        sku = str(row[sku_col]).strip()
+        entry = {"cantidad": int(row['cantidad'])}
+        if 'nombre' in pivot.columns and pd.notna(row.get('nombre')):
+            entry['nombre'] = str(row['nombre']).strip()
+        if 'peso_kg' in pivot.columns and pd.notna(row.get('peso_kg')):
+            try:
+                entry['peso_kg'] = float(row['peso_kg'])
+            except Exception:
+                pass
+        inventory[sku] = entry
 
-        entry = {"cantidad": qty_int}
-        if name_col is not None and row[name_col]:
-            entry["nombre"] = str(row[name_col]).strip()
-        if peso_col is not None and isinstance(row[peso_col], (int, float)):
-            entry["peso_kg"] = float(row[peso_col])
-
-        inventory[sku_str] = entry
-
-    print(f"✓ {len(inventory)} SKUs parseados del Excel")
+    skus_con_stock = sum(1 for e in inventory.values() if e['cantidad'] > 0)
+    print(f"✓ Tabla dinámica: {len(inventory)} SKUs únicos  |  {skus_con_stock} con stock > 0")
     return inventory
 
 
