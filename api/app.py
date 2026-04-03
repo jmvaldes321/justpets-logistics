@@ -2,6 +2,11 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 import json
 import os
+import time
+import requests as http_requests
+
+GITHUB_REPO  = "jmvaldes321/justpets-logistics"
+GITHUB_WORKFLOW = "sync_inventory.yml"
 
 app = Flask(__name__)
 CORS(app)
@@ -84,6 +89,93 @@ def products_endpoint():
         'pages': (total + limit - 1) // limit,
         'data': products[start:end]
     })
+
+STEP_LABELS = {
+    "Set up job":                       None,
+    "Checkout repo":                    None,
+    "Setup Python":                     None,
+    "Post Checkout repo":               None,
+    "Post Setup Python":                None,
+    "Complete job":                     None,
+    "Install dependencias":             "Instalando dependencias",
+    "Ejecutar sync de inventario":      "Descargando inventario de logystix.co",
+    "Subir screenshots de debug (si hay error)": None,
+    "Commit y push data.json actualizado": "Publicando cambios",
+}
+
+def _gh_headers():
+    token = os.environ.get("GITHUB_PAT", "")
+    return {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+@app.route('/api/sync/trigger', methods=['POST'])
+def sync_trigger():
+    if not os.environ.get("GITHUB_PAT"):
+        return jsonify({'error': 'GITHUB_PAT no configurado en las variables de entorno de Vercel'}), 500
+
+    resp = http_requests.post(
+        f"https://api.github.com/repos/{GITHUB_REPO}/actions/workflows/{GITHUB_WORKFLOW}/dispatches",
+        headers=_gh_headers(),
+        json={"ref": "main"},
+        timeout=10
+    )
+    if resp.status_code != 204:
+        return jsonify({'error': f'GitHub API error: {resp.text}'}), resp.status_code
+
+    # Esperar brevemente a que el run se registre
+    time.sleep(3)
+    runs_resp = http_requests.get(
+        f"https://api.github.com/repos/{GITHUB_REPO}/actions/runs?event=workflow_dispatch&per_page=1",
+        headers=_gh_headers(), timeout=10
+    )
+    runs = runs_resp.json().get('workflow_runs', [])
+    run_id = runs[0]['id'] if runs else None
+    return jsonify({'run_id': run_id, 'ok': True})
+
+
+@app.route('/api/sync/status')
+def sync_status():
+    run_id = request.args.get('run_id')
+    if not run_id:
+        return jsonify({'error': 'run_id requerido'}), 400
+
+    run_resp = http_requests.get(
+        f"https://api.github.com/repos/{GITHUB_REPO}/actions/runs/{run_id}",
+        headers=_gh_headers(), timeout=10
+    )
+    if run_resp.status_code != 200:
+        return jsonify({'error': 'Run no encontrado'}), 404
+    run = run_resp.json()
+
+    jobs_resp = http_requests.get(
+        f"https://api.github.com/repos/{GITHUB_REPO}/actions/runs/{run_id}/jobs",
+        headers=_gh_headers(), timeout=10
+    )
+    jobs_data = jobs_resp.json().get('jobs', [])
+
+    steps = []
+    if jobs_data:
+        for step in jobs_data[0].get('steps', []):
+            label = STEP_LABELS.get(step['name'], step['name'])
+            if label is None:
+                continue
+            steps.append({
+                'name': label,
+                'status': step['status'],        # queued | in_progress | completed
+                'conclusion': step.get('conclusion'),  # success | failure | None
+            })
+
+    return jsonify({
+        'run_id': run['id'],
+        'status': run['status'],
+        'conclusion': run.get('conclusion'),
+        'created_at': run.get('created_at'),
+        'steps': steps,
+    })
+
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
