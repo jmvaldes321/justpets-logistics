@@ -90,6 +90,13 @@
             <span class="text-sm text-slate-500">Publicando cambios</span>
           </div>
         </div>
+        <!-- Tiempo estimado -->
+        <div id="sync-eta" class="hidden mt-1 flex items-center gap-2">
+          <div class="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div id="sync-progress-bar" class="h-full bg-indigo-400 rounded-full transition-all duration-700" style="width:0%"></div>
+          </div>
+          <span id="sync-eta-label" class="text-xs text-slate-400 tabular-nums w-16 text-right">~67s</span>
+        </div>
         <div id="sync-result" class="hidden mt-3 px-4 py-3 rounded-xl text-sm font-medium"></div>
       </div>
     </div>
@@ -423,8 +430,11 @@ init().catch(err => {
 
 // --- Sync manual ---
 let syncPollInterval = null;
+let syncEtaInterval = null;
 let syncRunId = null;
+let syncStartTime = null;
 let panelMinimized = false;
+const SYNC_ESTIMATED_SECS = 67;
 
 const STEP_KEYS = {
   'Instalando dependencias':              'deps',
@@ -442,7 +452,39 @@ function openPanel() {
   document.getElementById('sync-result').classList.add('hidden');
   document.getElementById('btn-close-panel').classList.add('hidden');
   document.getElementById('sync-pill').classList.add('hidden');
+  document.getElementById('sync-eta').classList.add('hidden');
+  document.getElementById('sync-progress-bar').style.width = '0%';
   document.getElementById('sync-panel').classList.remove('hidden');
+}
+
+function startEtaTimer() {
+  syncStartTime = Date.now();
+  document.getElementById('sync-eta').classList.remove('hidden');
+
+  if (syncEtaInterval) clearInterval(syncEtaInterval);
+  syncEtaInterval = setInterval(() => {
+    const elapsed = (Date.now() - syncStartTime) / 1000;
+    const remaining = Math.max(0, SYNC_ESTIMATED_SECS - elapsed);
+    const pct = Math.min(100, (elapsed / SYNC_ESTIMATED_SECS) * 100);
+
+    document.getElementById('sync-progress-bar').style.width = pct + '%';
+
+    if (remaining > 0) {
+      document.getElementById('sync-eta-label').textContent = `~${Math.ceil(remaining)}s`;
+      // Actualizar pill también
+      if (panelMinimized) {
+        document.getElementById('pill-label').textContent = `Sincronizando... ~${Math.ceil(remaining)}s`;
+      }
+    } else {
+      document.getElementById('sync-eta-label').textContent = 'finalizando...';
+    }
+  }, 500);
+}
+
+function stopEtaTimer() {
+  if (syncEtaInterval) { clearInterval(syncEtaInterval); syncEtaInterval = null; }
+  document.getElementById('sync-progress-bar').style.width = '100%';
+  document.getElementById('sync-eta-label').textContent = '✓';
 }
 
 function minimizePanel() {
@@ -501,6 +543,7 @@ async function triggerSync() {
     setStepState('queue', 'success');
     document.getElementById('sync-label').textContent = 'En progreso...';
     document.getElementById('sync-icon').classList.add('animate-spin');
+    startEtaTimer();
 
     // Poll cada 1.5 segundos
     syncPollInterval = setInterval(() => pollStatus(syncRunId), 1500);
@@ -532,7 +575,7 @@ async function pollStatus(runId) {
       clearInterval(syncPollInterval); syncPollInterval = null;
       if (d.conclusion === 'success') {
         setStepState('publish', 'success');
-        // Actualizar pill si está minimizado
+        stopEtaTimer();
         document.getElementById('pill-icon').classList.remove('animate-spin');
         document.getElementById('pill-label').textContent = '✓ Inventario actualizado';
         // Auto-cierre: si está visible cerrar en 2s, si minimizado cerrar en 4s
@@ -542,6 +585,7 @@ async function pollStatus(runId) {
         }
         setTimeout(() => { closePanel(); init(); resetBtn(); }, delay);
       } else {
+        stopEtaTimer();
         document.getElementById('pill-label').textContent = '✗ Error en sync';
         document.getElementById('pill-icon').classList.remove('animate-spin');
         if (!panelMinimized) restorePanel();
