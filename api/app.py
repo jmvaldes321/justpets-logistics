@@ -4,9 +4,18 @@ import json
 import os
 import time
 import requests as http_requests
+from datetime import datetime, timedelta
 
 GITHUB_REPO  = "jmvaldes321/justpets-logistics"
 GITHUB_WORKFLOW = "sync_inventory.yml"
+
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_SVC = os.environ.get("SUPABASE_SERVICE_KEY", "")
+SUPABASE_ANON = os.environ.get("SUPABASE_ANON_KEY", "")
+
+def _sb_headers(use_service=False):
+    key = SUPABASE_SVC if use_service else SUPABASE_ANON
+    return {"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json"}
 
 app = Flask(__name__)
 CORS(app)
@@ -209,6 +218,52 @@ def sync_status():
         'created_at': run.get('created_at'),
         'steps': steps,
     })
+
+
+@app.route('/api/config')
+def config():
+    return jsonify({
+        'supabase_url': SUPABASE_URL,
+        'supabase_anon_key': SUPABASE_ANON,
+    })
+
+
+@app.route('/api/history/daily')
+def history_daily():
+    date_from = request.args.get('from', (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d'))
+    date_to   = request.args.get('to',   datetime.now().strftime('%Y-%m-%d'))
+    r = http_requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/get_daily_m3",
+        headers=_sb_headers(use_service=True),
+        json={"date_from": date_from, "date_to": date_to}, timeout=15
+    )
+    return jsonify(r.json())
+
+
+@app.route('/api/history/skus')
+def history_skus():
+    date_from = request.args.get('from', (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d'))
+    date_to   = request.args.get('to',   datetime.now().strftime('%Y-%m-%d'))
+    top_n     = int(request.args.get('top', 20))
+    r = http_requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/get_top_skus",
+        headers=_sb_headers(use_service=True),
+        json={"date_from": date_from, "date_to": date_to, "top_n": top_n}, timeout=15
+    )
+    return jsonify(r.json())
+
+
+@app.route('/api/history/sku_trend')
+def history_sku_trend():
+    date_from = request.args.get('from', (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d'))
+    date_to   = request.args.get('to',   datetime.now().strftime('%Y-%m-%d'))
+    top_n     = int(request.args.get('top', 10))
+    r = http_requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/get_sku_trend",
+        headers=_sb_headers(use_service=True),
+        json={"date_from": date_from, "date_to": date_to, "top_n": top_n}, timeout=15
+    )
+    return jsonify(r.json())
 
 
 ML_CLIENT_ID     = os.environ.get("ML_CLIENT_ID", "")

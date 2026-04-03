@@ -28,11 +28,13 @@ jobs:
 
       - name: Ejecutar sync de inventario
         env:
-          ML_CLIENT_ID:     ${{ secrets.ML_CLIENT_ID }}
-          ML_CLIENT_SECRET: ${{ secrets.ML_CLIENT_SECRET }}
-          ML_USER_ID:       ${{ secrets.ML_USER_ID }}
-          ML_REFRESH_TOKEN: ${{ secrets.ML_REFRESH_TOKEN }}
-          GITHUB_PAT:       ${{ secrets.GITHUB_TOKEN }}
+          ML_CLIENT_ID:      ${{ secrets.ML_CLIENT_ID }}
+          ML_CLIENT_SECRET:  ${{ secrets.ML_CLIENT_SECRET }}
+          ML_USER_ID:        ${{ secrets.ML_USER_ID }}
+          ML_REFRESH_TOKEN:  ${{ secrets.ML_REFRESH_TOKEN }}
+          GITHUB_PAT:        ${{ secrets.GITHUB_TOKEN }}
+          SUPABASE_URL:      ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python scripts/sync_inventory.py
 
       - name: Commit y push data.json actualizado

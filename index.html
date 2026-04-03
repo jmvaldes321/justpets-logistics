@@ -6,6 +6,9 @@
   <title>JustPets Logistics — Mercado Libre</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
   <style>
     body { font-family: 'Inter', system-ui, sans-serif; background: #f1f5f9; }
     .card { background: white; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
@@ -15,6 +18,12 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .tab-btn { border-bottom: 2px solid transparent; color: #64748b; transition: all .15s; }
+    .tab-btn.active { border-bottom-color: #6366f1; color: #6366f1; font-weight: 600; }
+    .tab-btn:hover:not(.active) { color: #334155; border-bottom-color: #e2e8f0; }
+    .flatpickr-input { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 12px; font-size: 13px; outline: none; cursor: pointer; width: 220px; }
+    .quick-btn { padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 500; border: 1px solid #e2e8f0; color: #64748b; cursor: pointer; transition: all .15s; }
+    .quick-btn:hover, .quick-btn.active { background: #6366f1; color: white; border-color: #6366f1; }
   </style>
 </head>
 <body class="min-h-screen">
@@ -159,6 +168,18 @@
     </button>
   </div>
 
+  <!-- Nav tabs -->
+  <nav class="bg-white border-b border-slate-200 px-6">
+    <div class="max-w-screen-xl mx-auto flex gap-0">
+      <button onclick="showSection('dashboard')" id="tab-dashboard"
+        class="tab-btn active px-5 py-3 text-sm">Dashboard</button>
+      <button onclick="showSection('historico')" id="tab-historico"
+        class="tab-btn px-5 py-3 text-sm">Resumen Histórico</button>
+    </div>
+  </nav>
+
+  <!-- ═══ DASHBOARD ═══ -->
+  <div id="sec-dashboard">
   <main class="max-w-screen-xl mx-auto px-4 py-6 space-y-6">
 
     <!-- KPIs -->
@@ -267,6 +288,108 @@
     </div>
 
   </main>
+  </div><!-- /sec-dashboard -->
+
+  <!-- ═══ RESUMEN HISTÓRICO ═══ -->
+  <div id="sec-historico" class="hidden">
+  <main class="max-w-screen-xl mx-auto px-4 py-6 space-y-6">
+
+    <!-- Filtro fechas -->
+    <div class="card px-5 py-4 flex flex-wrap items-center gap-4">
+      <div>
+        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">Rango de fechas</p>
+        <input id="hist-date-range" type="text" placeholder="Selecciona un rango..." readonly/>
+      </div>
+      <div>
+        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">Acceso rápido</p>
+        <div class="flex gap-2">
+          <button class="quick-btn" onclick="setQuick(7)">7d</button>
+          <button class="quick-btn active" onclick="setQuick(30)">30d</button>
+          <button class="quick-btn" onclick="setQuick(90)">90d</button>
+        </div>
+      </div>
+      <div class="ml-auto text-xs text-slate-400 italic" id="hist-data-note">
+        Los datos se van acumulando con cada sync
+      </div>
+    </div>
+
+    <!-- KPIs históricos -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="card p-4 flex flex-col gap-1">
+        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">M³ promedio diario</p>
+        <p class="text-2xl font-bold text-indigo-600" id="hist-kpi-avg">—</p>
+        <p class="text-xs text-slate-400">promedio en el período</p>
+      </div>
+      <div class="card p-4 flex flex-col gap-1">
+        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">M³ máximo</p>
+        <p class="text-2xl font-bold text-emerald-600" id="hist-kpi-max">—</p>
+        <p class="text-xs text-slate-400">pico registrado</p>
+      </div>
+      <div class="card p-4 flex flex-col gap-1">
+        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">M³ mínimo</p>
+        <p class="text-2xl font-bold text-slate-700" id="hist-kpi-min">—</p>
+        <p class="text-xs text-slate-400">mínimo registrado</p>
+      </div>
+      <div class="card p-4 flex flex-col gap-1">
+        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Días con datos</p>
+        <p class="text-2xl font-bold text-slate-700" id="hist-kpi-days">—</p>
+        <p class="text-xs text-slate-400">días registrados</p>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="card p-5">
+        <h2 class="text-sm font-semibold text-slate-700 mb-4">Tendencia M³ total diario</h2>
+        <div class="relative h-72">
+          <canvas id="chart-hist-total"></canvas>
+        </div>
+      </div>
+      <div class="card p-5">
+        <h2 class="text-sm font-semibold text-slate-700 mb-4">Top 15 SKUs — M³ promedio en período</h2>
+        <div class="relative h-72">
+          <canvas id="chart-hist-skus"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tendencia top SKUs -->
+    <div class="card p-5">
+      <h2 class="text-sm font-semibold text-slate-700 mb-4">Evolución M³ — Top 8 productos</h2>
+      <div class="relative h-80">
+        <canvas id="chart-hist-trend"></canvas>
+      </div>
+    </div>
+
+    <!-- Tabla SKUs -->
+    <div class="card">
+      <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <h2 class="text-sm font-semibold text-slate-700">Detalle por producto</h2>
+          <p class="text-xs text-slate-400 mt-0.5">M³ promedio, máximo y mínimo en el período seleccionado</p>
+        </div>
+        <div id="hist-tabla-loading" class="spinner hidden"></div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+            <tr>
+              <th class="px-4 py-3 text-left font-semibold">SKU</th>
+              <th class="px-4 py-3 text-left font-semibold">Producto</th>
+              <th class="px-4 py-3 text-right font-semibold">M³ promedio</th>
+              <th class="px-4 py-3 text-right font-semibold">M³ máximo</th>
+              <th class="px-4 py-3 text-right font-semibold">Stock promedio</th>
+            </tr>
+          </thead>
+          <tbody id="hist-tabla-body" class="divide-y divide-slate-100">
+            <tr><td colspan="5" class="text-center py-12 text-slate-400 text-sm">Cargando datos...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+  </div><!-- /sec-historico -->
 
 <script>
 const API = window.location.hostname === 'localhost' ? 'http://localhost:5001' : '';
@@ -753,6 +876,222 @@ function resetBtn() {
   document.getElementById('sync-label').textContent = 'Sincronizar ahora';
   document.getElementById('sync-icon').classList.remove('animate-spin');
 }
+
+// ═══════════════════════════════════════════════════
+// NAVEGACIÓN
+// ═══════════════════════════════════════════════════
+function showSection(name) {
+  ['dashboard','historico'].forEach(s => {
+    document.getElementById(`sec-${s}`).classList.toggle('hidden', s !== name);
+    document.getElementById(`tab-${s}`).classList.toggle('active', s === name);
+  });
+  if (name === 'historico' && !histLoaded) loadHistorico();
+}
+
+// ═══════════════════════════════════════════════════
+// RESUMEN HISTÓRICO
+// ═══════════════════════════════════════════════════
+let histLoaded = false;
+let histFrom = null;
+let histTo   = null;
+let chartHistTotal = null;
+let chartHistSkus  = null;
+let chartHistTrend = null;
+let datePicker = null;
+
+const HIST_COLORS = [
+  '#6366f1','#f59e0b','#10b981','#ef4444','#3b82f6',
+  '#a855f7','#f97316','#14b8a6','#ec4899','#84cc16'
+];
+
+function initDatePicker() {
+  const today = new Date();
+  const d30   = new Date(today); d30.setDate(today.getDate() - 30);
+
+  datePicker = flatpickr('#hist-date-range', {
+    mode: 'range',
+    dateFormat: 'Y-m-d',
+    locale: 'es',
+    defaultDate: [d30, today],
+    onChange: (dates) => {
+      if (dates.length === 2) {
+        histFrom = flatpickr.formatDate(dates[0], 'Y-m-d');
+        histTo   = flatpickr.formatDate(dates[1], 'Y-m-d');
+        document.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('active'));
+        loadHistorico();
+      }
+    }
+  });
+
+  histFrom = flatpickr.formatDate(d30, 'Y-m-d');
+  histTo   = flatpickr.formatDate(today, 'Y-m-d');
+}
+
+function setQuick(days) {
+  const today = new Date();
+  const from  = new Date(today); from.setDate(today.getDate() - days);
+  histFrom = flatpickr.formatDate(from, 'Y-m-d');
+  histTo   = flatpickr.formatDate(today, 'Y-m-d');
+  datePicker.setDate([from, today]);
+  document.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  loadHistorico();
+}
+
+async function loadHistorico() {
+  histLoaded = true;
+  document.getElementById('hist-tabla-loading').classList.remove('hidden');
+
+  const params = `from=${histFrom}&to=${histTo}`;
+  const [dailyRes, skusRes, trendRes] = await Promise.all([
+    fetch(`${API}/api/history/daily?${params}`),
+    fetch(`${API}/api/history/skus?${params}&top=15`),
+    fetch(`${API}/api/history/sku_trend?${params}&top=8`),
+  ]);
+
+  const daily = await dailyRes.json();
+  const skus  = await skusRes.json();
+  const trend = await trendRes.json();
+
+  document.getElementById('hist-tabla-loading').classList.add('hidden');
+
+  renderHistKpis(daily);
+  renderChartHistTotal(daily);
+  renderChartHistSkus(skus);
+  renderChartHistTrend(trend);
+  renderHistTabla(skus);
+}
+
+function renderHistKpis(daily) {
+  if (!daily.length) {
+    ['avg','max','min','days'].forEach(k => document.getElementById(`hist-kpi-${k}`).textContent = '—');
+    document.getElementById('hist-data-note').textContent = 'Sin datos en el período seleccionado';
+    return;
+  }
+  const vals = daily.map(d => parseFloat(d.total_m3));
+  const avg  = vals.reduce((a,b) => a+b, 0) / vals.length;
+  document.getElementById('hist-kpi-avg').textContent  = avg.toFixed(2);
+  document.getElementById('hist-kpi-max').textContent  = Math.max(...vals).toFixed(2);
+  document.getElementById('hist-kpi-min').textContent  = Math.min(...vals).toFixed(2);
+  document.getElementById('hist-kpi-days').textContent = daily.length;
+  document.getElementById('hist-data-note').textContent = `${daily.length} días con datos registrados`;
+}
+
+function renderChartHistTotal(daily) {
+  const ctx = document.getElementById('chart-hist-total').getContext('2d');
+  if (chartHistTotal) chartHistTotal.destroy();
+  if (!daily.length) return;
+  chartHistTotal = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: daily.map(d => d.day),
+      datasets: [{
+        label: 'M³ total',
+        data: daily.map(d => parseFloat(d.total_m3)),
+        borderColor: '#6366f1',
+        backgroundColor: 'rgba(99,102,241,0.08)',
+        borderWidth: 2,
+        pointRadius: daily.length > 60 ? 0 : 3,
+        tension: 0.3,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 10 }, maxTicksLimit: 10 } },
+        y: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+function renderChartHistSkus(skus) {
+  const ctx = document.getElementById('chart-hist-skus').getContext('2d');
+  if (chartHistSkus) chartHistSkus.destroy();
+  if (!skus.length) return;
+  chartHistSkus = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: skus.map(s => s.nombre.length > 22 ? s.nombre.slice(0,22)+'…' : s.nombre),
+      datasets: [{
+        label: 'M³ promedio',
+        data: skus.map(s => parseFloat(s.avg_m3)),
+        backgroundColor: HIST_COLORS[0],
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 } } },
+        y: { grid: { display: false }, ticks: { font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+function renderChartHistTrend(trend) {
+  const ctx = document.getElementById('chart-hist-trend').getContext('2d');
+  if (chartHistTrend) chartHistTrend.destroy();
+  if (!trend.length) return;
+
+  // Group by SKU
+  const skuMap = {};
+  const daysSet = new Set();
+  trend.forEach(r => {
+    if (!skuMap[r.sku]) skuMap[r.sku] = { nombre: r.nombre, data: {} };
+    skuMap[r.sku].data[r.day] = parseFloat(r.m3_totales);
+    daysSet.add(r.day);
+  });
+  const days = [...daysSet].sort();
+  const datasets = Object.entries(skuMap).map(([sku, info], i) => ({
+    label: info.nombre.length > 25 ? info.nombre.slice(0,25)+'…' : info.nombre,
+    data: days.map(d => info.data[d] ?? null),
+    borderColor: HIST_COLORS[i % HIST_COLORS.length],
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    pointRadius: days.length > 60 ? 0 : 2,
+    tension: 0.3,
+    spanGaps: true,
+  }));
+
+  chartHistTrend = new Chart(ctx, {
+    type: 'line',
+    data: { labels: days, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 12 } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 10 }, maxTicksLimit: 10 } },
+        y: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+function renderHistTabla(skus) {
+  const tbody = document.getElementById('hist-tabla-body');
+  if (!skus.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center py-12 text-slate-400 text-sm">Sin datos en el período</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = skus.map((s, i) => `
+    <tr class="hover:bg-slate-50 transition-colors">
+      <td class="px-4 py-3 text-slate-400 font-mono text-xs">${s.sku}</td>
+      <td class="px-4 py-3 text-slate-700 font-medium">
+        <span title="${s.nombre}">${s.nombre.length > 50 ? s.nombre.slice(0,50)+'…' : s.nombre}</span>
+      </td>
+      <td class="px-4 py-3 text-right font-mono text-xs font-bold text-indigo-600">${parseFloat(s.avg_m3).toFixed(4)}</td>
+      <td class="px-4 py-3 text-right font-mono text-xs text-emerald-600">${parseFloat(s.max_m3).toFixed(4)}</td>
+      <td class="px-4 py-3 text-right text-slate-600">${parseFloat(s.avg_inventario).toFixed(0)} uds</td>
+    </tr>`).join('');
+}
+
+// Init date picker on load
+initDatePicker();
 </script>
 </body>
 </html>
