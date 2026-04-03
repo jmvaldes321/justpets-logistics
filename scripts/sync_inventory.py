@@ -48,30 +48,35 @@ async def download_report(download_dir: str) -> str:
         await page.screenshot(path="step2_filled.png")
 
         await page.locator("button[type='submit'], .btn-login, input[type='submit'], button:has-text('Entrar')").first.click()
-        await page.wait_for_timeout(4000)
-        await page.wait_for_load_state("domcontentloaded")
+        # Esperar a que el SPA cargue el dashboard completamente
+        await page.wait_for_load_state("networkidle", timeout=30000)
+        await page.wait_for_timeout(3000)
         await page.screenshot(path="step3_after_login.png")
         print(f"  URL post-login: {page.url}")
 
-        # Detectar login exitoso: URL cambió o no hay formulario de login visible
+        # Detectar login exitoso: no hay formulario de login visible
         login_form_visible = await page.locator("#username-input").is_visible()
         if login_form_visible:
             raise RuntimeError("Login fallido — el formulario sigue visible. Ver step3_after_login.png")
         print("✓ Login exitoso")
 
         # Navegar a Reporte de Inventarios → Reporte Consolidado
+        # El menú puede llamarse "Reporte de Inventario" o "Reportes de Inventario"
         print("→ Navegando a Reporte consolidado de inventarios...")
-        # Intentar con texto exacto, luego parcial
         try:
-            await page.get_by_text("Reporte de inventarios", exact=False).first.click()
+            await page.get_by_text("Reporte de Inventario", exact=False).first.click(timeout=10000)
             await page.wait_for_load_state("networkidle")
+            await page.wait_for_timeout(1500)
         except PlaywrightTimeout:
             await page.screenshot(path="nav_error.png")
-            raise RuntimeError("No se encontró 'Reporte de inventarios'. Ver nav_error.png")
+            raise RuntimeError("No se encontró 'Reporte de Inventario' en el menú. Ver nav_error.png")
+
+        await page.screenshot(path="step4_menu_inventario.png")
 
         try:
-            await page.get_by_text("Reporte consolidado", exact=False).first.click()
+            await page.get_by_text("Reporte consolidado", exact=False).first.click(timeout=10000)
             await page.wait_for_load_state("networkidle")
+            await page.wait_for_timeout(1500)
         except PlaywrightTimeout:
             await page.screenshot(path="nav2_error.png")
             raise RuntimeError("No se encontró 'Reporte consolidado'. Ver nav2_error.png")
