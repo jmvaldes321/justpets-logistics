@@ -1,0 +1,55 @@
+name: Sync Inventario Bodega
+
+on:
+  schedule:
+    # Hora Chile (UTC-3): 00:00 → 03:00 UTC | 08:00 → 11:00 UTC | 16:00 → 19:00 UTC
+    - cron: "0 3 * * *"
+    - cron: "0 11 * * *"
+    - cron: "0 19 * * *"
+  workflow_dispatch: # Permite ejecutar manualmente desde GitHub
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencias
+        run: |
+          pip install -r scripts/requirements.txt
+          playwright install chromium --with-deps
+
+      - name: Ejecutar sync de inventario
+        env:
+          LOGYSTIX_USER: ${{ secrets.LOGYSTIX_USER }}
+          LOGYSTIX_PASSWORD: ${{ secrets.LOGYSTIX_PASSWORD }}
+        run: python scripts/sync_inventory.py
+
+      - name: Subir screenshots de debug (si hay error)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshots
+          path: "*.png"
+          retention-days: 3
+
+      - name: Commit y push data.json actualizado
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add api/data.json
+          if git diff --cached --quiet; then
+            echo "Sin cambios en inventario"
+          else
+            git commit -m "chore: sync inventario $(date +'%Y-%m-%d %H:%M') CL"
+            git push
+          fi
