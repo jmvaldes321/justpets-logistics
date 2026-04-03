@@ -25,23 +25,38 @@ PASSWORD = os.environ["LOGYSTIX_PASSWORD"]
 async def download_report(download_dir: str) -> str:
     """Navega logystix.co, genera el reporte y descarga el Excel. Retorna la ruta del archivo."""
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(accept_downloads=True)
+        browser = await p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-blink-features=AutomationControlled"]
+        )
+        context = await browser.new_context(
+            accept_downloads=True,
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            viewport={"width": 1280, "height": 800}
+        )
         page = await context.new_page()
 
         print("→ Abriendo login...")
-        await page.goto("https://ok.logystix.co/site/login", wait_until="networkidle")
+        await page.goto("https://ok.logystix.co/site/login", wait_until="domcontentloaded")
+        await page.wait_for_timeout(2000)
+        await page.screenshot(path="step1_login_page.png")
+        print(f"  URL actual: {page.url}")
 
         # Login
         await page.fill("#username-input", USERNAME)
         await page.fill("#password-input", PASSWORD)
-        # Intentar múltiples selectores para el botón de submit
+        await page.screenshot(path="step2_filled.png")
+
         await page.locator("button[type='submit'], .btn-login, input[type='submit'], button:has-text('Entrar')").first.click()
-        try:
-            await page.wait_for_url(lambda url: "login" not in url, timeout=15000)
-        except PlaywrightTimeout:
-            await page.screenshot(path="login_error.png")
-            raise RuntimeError("Login fallido — credenciales incorrectas o la página no redirigió. Ver login_error.png")
+        await page.wait_for_timeout(4000)
+        await page.wait_for_load_state("domcontentloaded")
+        await page.screenshot(path="step3_after_login.png")
+        print(f"  URL post-login: {page.url}")
+
+        # Detectar login exitoso: URL cambió o no hay formulario de login visible
+        login_form_visible = await page.locator("#username-input").is_visible()
+        if login_form_visible:
+            raise RuntimeError("Login fallido — el formulario sigue visible. Ver step3_after_login.png")
         print("✓ Login exitoso")
 
         # Navegar a Reporte de Inventarios → Reporte Consolidado
