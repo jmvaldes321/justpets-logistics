@@ -102,6 +102,52 @@
     </div>
   </div>
 
+  <!-- Modal de edición de producto -->
+  <div id="edit-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4">
+      <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+        <h3 class="text-base font-semibold text-slate-800">Editar producto</h3>
+        <button onclick="closeEditModal()" class="text-slate-400 hover:text-slate-600 w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <form id="edit-form" class="px-6 py-5 space-y-4" onsubmit="saveProduct(event)">
+        <input type="hidden" id="edit-original-sku"/>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="col-span-2">
+            <label class="block text-xs font-medium text-slate-500 mb-1">Nombre del producto</label>
+            <input id="edit-nombre" type="text" required class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300"/>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">SKU / EAN</label>
+            <input id="edit-sku" type="text" required class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 font-mono"/>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">Peso (kg)</label>
+            <input id="edit-peso" type="number" step="0.001" min="0" required class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300"/>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">M³ / kg</label>
+            <input id="edit-m3xkg" type="number" step="0.0001" min="0" required class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 font-mono"/>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">M³ producto</label>
+            <input id="edit-m3prod" type="number" step="0.000001" min="0" required class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 font-mono"/>
+          </div>
+          <div class="col-span-2 bg-slate-50 rounded-xl px-4 py-3 flex items-center justify-between">
+            <span class="text-xs text-slate-500">M³ totales (calculado)</span>
+            <span id="edit-m3totales-preview" class="font-mono font-bold text-indigo-600 text-sm">—</span>
+          </div>
+        </div>
+        <div id="edit-error" class="hidden px-4 py-2 bg-red-50 text-red-600 text-sm rounded-lg"></div>
+        <div class="flex justify-end gap-3 pt-1">
+          <button type="button" onclick="closeEditModal()" class="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Cancelar</button>
+          <button type="submit" id="edit-save-btn" class="px-4 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors disabled:opacity-50">Guardar cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Pill flotante cuando está minimizado -->
   <div id="sync-pill" class="hidden fixed bottom-5 right-5 z-50">
     <button onclick="restorePanel()"
@@ -203,6 +249,7 @@
               <th class="px-4 py-3 text-right font-semibold">M³/kg</th>
               <th class="px-4 py-3 text-right font-semibold">M³ producto</th>
               <th class="px-4 py-3 text-right font-semibold">M³ totales</th>
+              <th class="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody id="tabla-body" class="divide-y divide-slate-100"></tbody>
@@ -303,7 +350,7 @@ async function loadProducts() {
 function renderTable(products) {
   const tbody = document.getElementById('tabla-body');
   if (!products.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="text-center py-12 text-slate-400 text-sm">Sin resultados</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center py-12 text-slate-400 text-sm">Sin resultados</td></tr>`;
     return;
   }
   tbody.innerHTML = products.map(p => {
@@ -312,7 +359,7 @@ function renderTable(products) {
       ? `<span class="text-slate-700 font-semibold">${p.inventario.toLocaleString('es-CL')}</span>`
       : `<span class="text-red-400">0</span>`;
     return `
-    <tr class="hover:bg-slate-50 transition-colors">
+    <tr class="hover:bg-slate-50 transition-colors" data-sku="${p.sku}">
       <td class="px-4 py-3 text-slate-400 font-mono text-xs">${p.sku}</td>
       <td class="px-4 py-3 text-slate-700 font-medium max-w-xs">
         <span title="${p.nombre}">${p.nombre.length > 45 ? p.nombre.slice(0,45)+'…' : p.nombre}</span>
@@ -322,6 +369,14 @@ function renderTable(products) {
       <td class="px-4 py-3 text-right text-slate-400 font-mono text-xs">${p.m3_x_kg.toFixed(4)}</td>
       <td class="px-4 py-3 text-right text-slate-500 font-mono text-xs">${p.m3_producto.toFixed(4)}</td>
       <td class="px-4 py-3 text-right font-mono text-xs ${m3Color}">${p.m3_totales.toFixed(4)}</td>
+      <td class="px-4 py-3 text-right">
+        <button data-edit='${JSON.stringify({sku:p.sku,nombre:p.nombre,peso_kg:p.peso_kg,m3_x_kg:p.m3_x_kg,m3_producto:p.m3_producto,inventario:p.inventario}).replace(/'/g,"&#39;")}'
+          class="edit-btn p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Editar">
+          <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+          </svg>
+        </button>
+      </td>
     </tr>`;
   }).join('');
 }
@@ -417,6 +472,11 @@ document.getElementById('btn-prev').addEventListener('click', () => {
 
 document.getElementById('btn-next').addEventListener('click', () => {
   if (currentPage < totalPages) { currentPage++; loadProducts(); }
+});
+
+document.getElementById('tabla-body').addEventListener('click', e => {
+  const btn = e.target.closest('.edit-btn');
+  if (btn) openEditModal(JSON.parse(btn.dataset.edit));
 });
 
 // Start
@@ -609,6 +669,82 @@ function showResult(type, msg) {
     document.getElementById('btn-close-panel').classList.remove('hidden');
   }
   el.textContent = msg;
+}
+
+// --- Edit modal ---
+function closeEditModal() {
+  document.getElementById('edit-modal').classList.add('hidden');
+}
+
+function updateM3Preview(m3prod, inv) {
+  const total = (parseFloat(m3prod) || 0) * (parseFloat(inv) || 0);
+  document.getElementById('edit-m3totales-preview').textContent = total.toFixed(4);
+}
+
+// Auto-calcular M3 producto cuando cambian peso o m3xkg
+document.getElementById('edit-peso').addEventListener('input', recalcM3prod);
+document.getElementById('edit-m3xkg').addEventListener('input', recalcM3prod);
+document.getElementById('edit-m3prod').addEventListener('input', () => {
+  const inv = document.getElementById('edit-form').dataset.inventario || 0;
+  updateM3Preview(document.getElementById('edit-m3prod').value, inv);
+});
+
+function recalcM3prod() {
+  const peso = parseFloat(document.getElementById('edit-peso').value) || 0;
+  const m3xkg = parseFloat(document.getElementById('edit-m3xkg').value) || 0;
+  const m3prod = parseFloat((peso * m3xkg).toFixed(6));
+  document.getElementById('edit-m3prod').value = m3prod;
+  const inv = document.getElementById('edit-form').dataset.inventario || 0;
+  updateM3Preview(m3prod, inv);
+}
+
+function openEditModal(p) {
+  document.getElementById('edit-original-sku').value = p.sku;
+  document.getElementById('edit-nombre').value = p.nombre;
+  document.getElementById('edit-sku').value = p.sku;
+  document.getElementById('edit-peso').value = p.peso_kg;
+  document.getElementById('edit-m3xkg').value = p.m3_x_kg;
+  document.getElementById('edit-m3prod').value = p.m3_producto;
+  document.getElementById('edit-form').dataset.inventario = p.inventario;
+  document.getElementById('edit-error').classList.add('hidden');
+  updateM3Preview(p.m3_producto, p.inventario);
+  document.getElementById('edit-modal').classList.remove('hidden');
+}
+
+async function saveProduct(e) {
+  e.preventDefault();
+  const btn = document.getElementById('edit-save-btn');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+  document.getElementById('edit-error').classList.add('hidden');
+
+  const originalSku = document.getElementById('edit-original-sku').value;
+  const payload = {
+    nombre:      document.getElementById('edit-nombre').value.trim(),
+    sku:         document.getElementById('edit-sku').value.trim(),
+    peso_kg:     parseFloat(document.getElementById('edit-peso').value),
+    m3_x_kg:     parseFloat(document.getElementById('edit-m3xkg').value),
+    m3_producto: parseFloat(document.getElementById('edit-m3prod').value),
+  };
+
+  try {
+    const res = await fetch(`${API}/api/products/${encodeURIComponent(originalSku)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al guardar');
+    closeEditModal();
+    await Promise.all([loadSummary(), loadProducts()]);
+  } catch (err) {
+    const errEl = document.getElementById('edit-error');
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Guardar cambios';
+  }
 }
 
 function resetBtn() {

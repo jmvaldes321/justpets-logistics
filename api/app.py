@@ -93,6 +93,36 @@ def products_endpoint():
         'data': products[start:end]
     })
 
+@app.route('/api/products/<path:sku>', methods=['PUT'])
+def update_product(sku):
+    body = request.json or {}
+    products = load_data()
+
+    idx = next((i for i, p in enumerate(products) if p['sku'] == sku), None)
+    if idx is None:
+        return jsonify({'error': 'Producto no encontrado'}), 404
+
+    p = products[idx]
+
+    if 'nombre' in body:
+        p['nombre'] = str(body['nombre']).strip()
+    if 'sku' in body:
+        p['sku'] = str(body['sku']).strip()
+    if 'peso_kg' in body:
+        p['peso_kg'] = float(body['peso_kg'])
+    if 'm3_x_kg' in body:
+        p['m3_x_kg'] = float(body['m3_x_kg'])
+    if 'm3_producto' in body:
+        p['m3_producto'] = float(body['m3_producto'])
+
+    p['m3_totales'] = round(p['m3_producto'] * p['inventario'], 6)
+
+    with open(DATA_PATH, 'w', encoding='utf-8') as f:
+        json.dump(products, f, ensure_ascii=False)
+
+    return jsonify(p)
+
+
 STEP_LABELS = {
     "Set up job":                       None,
     "Checkout repo":                    None,
