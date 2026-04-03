@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, redirect
 from flask_cors import CORS
 import json
 import os
@@ -177,6 +177,71 @@ def sync_status():
         'created_at': run.get('created_at'),
         'steps': steps,
     })
+
+
+ML_CLIENT_ID     = os.environ.get("ML_CLIENT_ID", "")
+ML_CLIENT_SECRET = os.environ.get("ML_CLIENT_SECRET", "")
+ML_REDIRECT_URI  = "https://justpets-logistics.vercel.app/api/auth/callback"
+ML_AUTH_URL      = "https://auth.mercadolibre.cl/authorization"
+ML_TOKEN_URL     = "https://api.mercadolibre.com/oauth/token"
+
+
+@app.route('/api/auth/ml')
+def ml_auth():
+    url = (
+        f"{ML_AUTH_URL}?response_type=code"
+        f"&client_id={ML_CLIENT_ID}"
+        f"&redirect_uri={ML_REDIRECT_URI}"
+    )
+    return redirect(url)
+
+
+@app.route('/api/auth/callback')
+def ml_callback():
+    code = request.args.get('code')
+    error = request.args.get('error')
+
+    if error:
+        return f"<h2>Error de autorización: {error}</h2>", 400
+    if not code:
+        return "<h2>No se recibió código de autorización.</h2>", 400
+
+    resp = http_requests.post(ML_TOKEN_URL, data={
+        'grant_type':    'authorization_code',
+        'client_id':     ML_CLIENT_ID,
+        'client_secret': ML_CLIENT_SECRET,
+        'code':          code,
+        'redirect_uri':  ML_REDIRECT_URI,
+    }, timeout=15)
+
+    if resp.status_code != 200:
+        return f"<h2>Error al obtener token: {resp.status_code}</h2><pre>{resp.text}</pre>", 400
+
+    tokens = resp.json()
+    access_token  = tokens.get('access_token', '')
+    refresh_token = tokens.get('refresh_token', '')
+    user_id       = tokens.get('user_id', '')
+    expires_in    = tokens.get('expires_in', 21600)
+
+    return f"""
+    <html><body style="font-family:monospace;padding:2rem;background:#f0fdf4">
+    <h2 style="color:#16a34a">✓ Autorización exitosa</h2>
+    <p>Usuario ML: <b>{user_id}</b></p>
+    <p>Ahora ejecuta estos comandos en tu terminal para guardar los tokens:</p>
+    <pre style="background:#1e293b;color:#f8fafc;padding:1rem;border-radius:8px">
+printf '{access_token}' | vercel env add ML_ACCESS_TOKEN production --yes
+printf '{refresh_token}' | vercel env add ML_REFRESH_TOKEN production --yes
+printf '{user_id}' | vercel env add ML_USER_ID production --yes
+    </pre>
+    <p style="color:#64748b">El access token expira en {expires_in // 3600}h. El refresh token se renueva automáticamente.</p>
+    </body></html>
+    """
+
+
+@app.route('/api/ml/notifications', methods=['POST'])
+def ml_notifications():
+    """Webhook de Mercado Libre para notificaciones en tiempo real."""
+    return jsonify({'status': 'ok'}), 200
 
 
 if __name__ == '__main__':
