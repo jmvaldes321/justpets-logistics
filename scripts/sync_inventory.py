@@ -107,6 +107,18 @@ async def download_report(download_dir: str) -> str:
         print("✓ En página de reporte consolidado")
         await page.screenshot(path="debug_reporte.png")
 
+        # Listar todas las opciones de bodega disponibles
+        bodega_opciones = await page.evaluate("""() => {
+            const selects = document.querySelectorAll('select');
+            for (const sel of selects) {
+                if (sel.options.length > 1) {
+                    return Array.from(sel.options).map(o => `${o.value}:${o.text.trim()}`);
+                }
+            }
+            return [];
+        }""")
+        print(f"  Opciones de bodega: {bodega_opciones}")
+
         # Seleccionar "Todos" en el campo Bodega (inventario total de todas las bodegas)
         print("→ Seleccionando todas las bodegas...")
         bodega_seleccionada = False
