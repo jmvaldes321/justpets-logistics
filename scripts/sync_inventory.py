@@ -35,12 +35,13 @@ async def download_report(download_dir: str) -> str:
         # Login
         await page.fill("#username-input", USERNAME)
         await page.fill("#password-input", PASSWORD)
-        await page.click(".btn-login")
-        await page.wait_for_load_state("networkidle")
-
-        if "login" in page.url:
+        # Intentar múltiples selectores para el botón de submit
+        await page.locator("button[type='submit'], .btn-login, input[type='submit'], button:has-text('Entrar')").first.click()
+        try:
+            await page.wait_for_url(lambda url: "login" not in url, timeout=15000)
+        except PlaywrightTimeout:
             await page.screenshot(path="login_error.png")
-            raise RuntimeError("Login fallido. Revisa las credenciales o el screenshot login_error.png")
+            raise RuntimeError("Login fallido — credenciales incorrectas o la página no redirigió. Ver login_error.png")
         print("✓ Login exitoso")
 
         # Navegar a Reporte de Inventarios → Reporte Consolidado
