@@ -502,8 +502,8 @@ async function triggerSync() {
     document.getElementById('sync-label').textContent = 'En progreso...';
     document.getElementById('sync-icon').classList.add('animate-spin');
 
-    // Poll cada 4 segundos
-    syncPollInterval = setInterval(() => pollStatus(syncRunId), 4000);
+    // Poll cada 1.5 segundos
+    syncPollInterval = setInterval(() => pollStatus(syncRunId), 1500);
     pollStatus(syncRunId);
 
   } catch (err) {
