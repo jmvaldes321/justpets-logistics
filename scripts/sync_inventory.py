@@ -176,13 +176,45 @@ async def download_report(download_dir: str) -> str:
         print("✓ Reporte generado")
 
         # Descargar Excel
+        # La tabla "Descarga de Reportes" muestra los reportes generados.
+        # El más reciente (primer fila) tiene el botón de descarga en la columna ACCIONES.
         print("→ Iniciando descarga del Excel...")
-        async with page.expect_download(timeout=60000) as dl_info:
+        await page.screenshot(path="step7_before_download.png")
+
+        async with page.expect_download(timeout=90000) as dl_info:
+            download_triggered = False
+            # 1. Botón de la primera fila en la tabla de reportes (más reciente)
             try:
-                await page.get_by_text("Generar descarga", exact=False).first.click()
-            except Exception:
-                # Intentar con botón de descarga genérico
-                await page.locator("[href*='download'], [href*='excel'], button:has-text('Excel')").first.click()
+                first_row_btn = page.locator("table tbody tr:first-child td:last-child a, table tbody tr:first-child td:last-child button").first
+                if await first_row_btn.is_visible(timeout=3000):
+                    await first_row_btn.click()
+                    download_triggered = True
+                    print("✓ Click en botón de la primera fila de la tabla")
+            except Exception as e:
+                print(f"  Primer fila fallida: {e}")
+
+            # 2. Buscar cualquier link/botón de descarga por atributo href o texto
+            if not download_triggered:
+                try:
+                    await page.locator("a[href*='download'], a[href*='excel'], a[download]").first.click(timeout=5000)
+                    download_triggered = True
+                    print("✓ Click en link de descarga")
+                except Exception:
+                    pass
+
+            # 3. Buscar botón naranja/acción en la tabla
+            if not download_triggered:
+                try:
+                    await page.locator("table .btn, table button, table a").first.click(timeout=5000)
+                    download_triggered = True
+                    print("✓ Click en botón de tabla")
+                except Exception:
+                    pass
+
+            if not download_triggered:
+                await page.screenshot(path="download_error.png")
+                all_texts = await page.locator("table a, table button").all_text_contents()
+                raise RuntimeError(f"No se encontró botón de descarga. Botones en tabla: {all_texts[:10]}")
 
         download = await dl_info.value
         dest = os.path.join(download_dir, download.suggested_filename or "inventario.xlsx")
