@@ -107,52 +107,23 @@ async def download_report(download_dir: str) -> str:
         print("✓ En página de reporte consolidado")
         await page.screenshot(path="debug_reporte.png")
 
-        # Listar todas las opciones de bodega disponibles
-        bodega_opciones = await page.evaluate("""() => {
-            const selects = document.querySelectorAll('select');
-            for (const sel of selects) {
-                if (sel.options.length > 1) {
-                    return Array.from(sel.options).map(o => `${o.value}:${o.text.trim()}`);
-                }
-            }
-            return [];
-        }""")
-        print(f"  Opciones de bodega: {bodega_opciones}")
-
-        # Seleccionar "Todos" en el campo Bodega (inventario total de todas las bodegas)
-        print("→ Seleccionando todas las bodegas...")
+        # Seleccionar bodega "ebox layout"
+        print("→ Seleccionando bodega 'ebox layout'...")
         bodega_seleccionada = False
-
-        # Prioridad: opción vacía/todos primero, luego fallback a ebox
-        BODEGA_KEYWORDS = ['todos', 'all', 'todas', '']
 
         # 1. Forzar selección vía JS en el native <select> + trigger Select2
         try:
             selected = await page.evaluate("""() => {
                 const selects = document.querySelectorAll('select');
                 for (const sel of selects) {
-                    // Buscar opción "Todos" / vacía
                     for (const opt of sel.options) {
-                        const t = opt.text.toLowerCase().trim();
-                        if (t === 'todos' || t === 'todas' || t === 'all' || opt.value === '' || opt.value === '0') {
+                        if (opt.text.toLowerCase().includes('ebox')) {
                             sel.value = opt.value;
                             sel.dispatchEvent(new Event('change', { bubbles: true }));
                             if (window.jQuery && window.jQuery(sel).data('select2')) {
                                 window.jQuery(sel).trigger('change');
                             }
-                            return opt.text || '(todos)';
-                        }
-                    }
-                    // Si no hay opción "todos", tomar la primera opción (placeholder/vacía)
-                    if (sel.options.length > 0) {
-                        const firstOpt = sel.options[0];
-                        if (!firstOpt.value || firstOpt.value === '0') {
-                            sel.value = firstOpt.value;
-                            sel.dispatchEvent(new Event('change', { bubbles: true }));
-                            if (window.jQuery && window.jQuery(sel).data('select2')) {
-                                window.jQuery(sel).trigger('change');
-                            }
-                            return firstOpt.text || '(primera opción)';
+                            return opt.text;
                         }
                     }
                 }
@@ -165,14 +136,18 @@ async def download_report(download_dir: str) -> str:
         except Exception as e:
             print(f"  JS select fallido: {e}")
 
-        # 2. Fallback: abrir Select2 y hacer click en la primera opción
+        # 2. Fallback: abrir Select2 y buscar "ebox"
         if not bodega_seleccionada:
             try:
                 await page.locator(".select2-selection, .select2-container").first.click()
                 await page.wait_for_timeout(600)
-                await page.locator(".select2-results__option").first.click(timeout=5000)
+                search_input = page.locator(".select2-search__field")
+                if await search_input.is_visible():
+                    await search_input.fill("ebox")
+                    await page.wait_for_timeout(400)
+                await page.locator(".select2-results__option:has-text('ebox')").first.click(timeout=5000)
                 bodega_seleccionada = True
-                print("✓ Bodega (Select2 primera opción)")
+                print("✓ Bodega (Select2 UI): ebox layout")
             except Exception as e:
                 print(f"  Select2 UI fallido: {e}")
 
