@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>JustPets Logistics — Bodega</title>
+  <title>JustPets Logistics — Mercado Libre</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
@@ -29,7 +29,7 @@
       </div>
       <div>
         <h1 class="text-base font-semibold text-slate-800 leading-none">JustPets Logistics</h1>
-        <p class="text-xs text-slate-400 mt-0.5">Control de bodega — metros cúbicos</p>
+        <p class="text-xs text-slate-400 mt-0.5">Inventario Mercado Libre</p>
       </div>
     </div>
     <div class="flex items-center gap-3">
@@ -53,7 +53,7 @@
       <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
         <div>
           <h3 class="text-base font-semibold text-slate-800">Sincronizando inventario</h3>
-          <p class="text-xs text-slate-400 mt-0.5">Conectando con logystix.co — bodega ebox layout</p>
+          <p class="text-xs text-slate-400 mt-0.5">Conectando con la API de Mercado Libre</p>
         </div>
         <div class="flex items-center gap-2">
           <!-- Minimizar -->
@@ -83,7 +83,7 @@
           </div>
           <div class="sync-step flex items-center gap-3" data-key="download">
             <div class="step-icon w-6 h-6 rounded-full border-2 border-slate-200 flex items-center justify-center flex-shrink-0"></div>
-            <span class="text-sm text-slate-500">Descargando inventario de logystix.co</span>
+            <span class="text-sm text-slate-500">Leyendo inventario de Mercado Libre</span>
           </div>
           <div class="sync-step flex items-center gap-3" data-key="publish">
             <div class="step-icon w-6 h-6 rounded-full border-2 border-slate-200 flex items-center justify-center flex-shrink-0"></div>
@@ -95,7 +95,7 @@
           <div class="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
             <div id="sync-progress-bar" class="h-full bg-indigo-400 rounded-full transition-all duration-700" style="width:0%"></div>
           </div>
-          <span id="sync-eta-label" class="text-xs text-slate-400 tabular-nums w-16 text-right">~67s</span>
+          <span id="sync-eta-label" class="text-xs text-slate-400 tabular-nums w-16 text-right">~30s</span>
         </div>
         <div id="sync-result" class="hidden mt-3 px-4 py-3 rounded-xl text-sm font-medium"></div>
       </div>
@@ -118,19 +118,19 @@
     <!-- KPIs -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="kpi-grid">
       <div class="card p-4 flex flex-col gap-1">
-        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Total M³ bodega</p>
-        <p class="text-2xl font-bold text-indigo-600" id="kpi-m3">—</p>
-        <p class="text-xs text-slate-400">metros cúbicos totales</p>
+        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Publicaciones activas</p>
+        <p class="text-2xl font-bold text-indigo-600" id="kpi-productos">—</p>
+        <p class="text-xs text-slate-400">artículos en Mercado Libre</p>
       </div>
       <div class="card p-4 flex flex-col gap-1">
-        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Productos distintos</p>
-        <p class="text-2xl font-bold text-slate-700" id="kpi-productos">—</p>
-        <p class="text-xs text-slate-400">SKUs únicos</p>
+        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Con stock</p>
+        <p class="text-2xl font-bold text-emerald-600" id="kpi-con-stock">—</p>
+        <p class="text-xs text-slate-400">publicaciones disponibles</p>
       </div>
       <div class="card p-4 flex flex-col gap-1">
         <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Unidades totales</p>
         <p class="text-2xl font-bold text-slate-700" id="kpi-inventario">—</p>
-        <p class="text-xs text-slate-400">unidades en bodega</p>
+        <p class="text-xs text-slate-400">unidades disponibles</p>
       </div>
       <div class="card p-4 flex flex-col gap-1">
         <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Categorías</p>
@@ -143,14 +143,14 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <!-- Top 10 categorias -->
       <div class="card p-5">
-        <h2 class="text-sm font-semibold text-slate-700 mb-4">M³ por categoría (top 10)</h2>
+        <h2 class="text-sm font-semibold text-slate-700 mb-4">Top 10 categorías por unidades</h2>
         <div class="relative h-72">
           <canvas id="chart-categoria"></canvas>
         </div>
       </div>
       <!-- Top 15 productos -->
       <div class="card p-5">
-        <h2 class="text-sm font-semibold text-slate-700 mb-4">Top 15 productos por M³</h2>
+        <h2 class="text-sm font-semibold text-slate-700 mb-4">Top 15 publicaciones por stock</h2>
         <div class="relative h-72">
           <canvas id="chart-productos"></canvas>
         </div>
@@ -178,9 +178,7 @@
           </select>
           <!-- Sort -->
           <select id="sort-select" class="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300">
-            <option value="m3_totales">Ordenar: M³ totales</option>
-            <option value="inventario">Ordenar: Inventario</option>
-            <option value="peso_kg">Ordenar: Peso</option>
+            <option value="inventario">Ordenar: Stock</option>
             <option value="nombre">Ordenar: Nombre</option>
           </select>
         </div>
@@ -196,14 +194,10 @@
         <table class="w-full text-sm">
           <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
             <tr>
-              <th class="px-4 py-3 text-left font-semibold">SKU / EAN</th>
-              <th class="px-4 py-3 text-left font-semibold">Producto</th>
+              <th class="px-4 py-3 text-left font-semibold">ID / SKU</th>
+              <th class="px-4 py-3 text-left font-semibold">Publicación</th>
               <th class="px-4 py-3 text-left font-semibold">Categoría</th>
-              <th class="px-4 py-3 text-right font-semibold">Inventario</th>
-              <th class="px-4 py-3 text-right font-semibold">Peso (kg)</th>
-              <th class="px-4 py-3 text-right font-semibold">M³/kg</th>
-              <th class="px-4 py-3 text-right font-semibold">M³ producto</th>
-              <th class="px-4 py-3 text-right font-semibold">M³ totales</th>
+              <th class="px-4 py-3 text-right font-semibold">Stock</th>
             </tr>
           </thead>
           <tbody id="tabla-body" class="divide-y divide-slate-100"></tbody>
@@ -227,7 +221,7 @@ const API = window.location.hostname === 'localhost' ? 'http://localhost:5001' :
 let currentPage = 1;
 let currentCat = '';
 let currentSearch = '';
-let currentSort = 'm3_totales';
+let currentSort = 'inventario';
 let totalPages = 1;
 let searchTimer = null;
 
@@ -249,8 +243,8 @@ async function loadSummary() {
   const res = await fetch(`${API}/api/summary`);
   const d = await res.json();
 
-  document.getElementById('kpi-m3').textContent = d.total_m3.toLocaleString('es-CL', {minimumFractionDigits:2, maximumFractionDigits:2});
   document.getElementById('kpi-productos').textContent = d.total_productos.toLocaleString('es-CL');
+  document.getElementById('kpi-con-stock').textContent = (d.con_stock || 0).toLocaleString('es-CL');
   document.getElementById('kpi-inventario').textContent = d.total_inventario.toLocaleString('es-CL');
   document.getElementById('kpi-categorias').textContent = d.por_categoria.length;
 
@@ -304,25 +298,27 @@ async function loadProducts() {
 function renderTable(products) {
   const tbody = document.getElementById('tabla-body');
   if (!products.length) {
-    tbody.innerHTML = `<tr><td colspan="8" class="text-center py-12 text-slate-400 text-sm">Sin resultados</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" class="text-center py-12 text-slate-400 text-sm">Sin resultados</td></tr>`;
     return;
   }
   tbody.innerHTML = products.map(p => {
-    const m3Color = p.m3_totales > 5 ? 'text-indigo-600 font-bold' : p.m3_totales > 1 ? 'text-slate-700 font-semibold' : 'text-slate-500';
+    const stockColor = p.inventario > 50 ? 'text-emerald-600 font-bold' : p.inventario > 0 ? 'text-slate-700 font-semibold' : 'text-red-400';
+    const stockBadge = p.inventario > 0
+      ? `<span class="badge bg-emerald-50 text-emerald-700">${p.inventario.toLocaleString('es-CL')} uds</span>`
+      : `<span class="badge bg-red-50 text-red-500">Sin stock</span>`;
+    const mlLink = p.ml_item_id
+      ? `<a href="https://articulo.mercadolibre.cl/${p.ml_item_id}" target="_blank" class="text-indigo-400 hover:text-indigo-600 font-mono text-xs">${p.ml_item_id}</a>`
+      : `<span class="text-slate-400 font-mono text-xs">${p.sku}</span>`;
     return `
     <tr class="hover:bg-slate-50 transition-colors">
-      <td class="px-4 py-3 text-slate-400 font-mono text-xs">${p.sku}</td>
-      <td class="px-4 py-3 text-slate-700 font-medium max-w-xs">
-        <span title="${p.nombre}">${p.nombre.length > 45 ? p.nombre.slice(0,45)+'…' : p.nombre}</span>
+      <td class="px-4 py-3">${mlLink}</td>
+      <td class="px-4 py-3 text-slate-700 font-medium max-w-sm">
+        <span title="${p.nombre}">${p.nombre.length > 55 ? p.nombre.slice(0,55)+'…' : p.nombre}</span>
       </td>
       <td class="px-4 py-3">
         <span class="badge bg-slate-100 text-slate-600">${p.categoria}</span>
       </td>
-      <td class="px-4 py-3 text-right text-slate-600">${p.inventario.toLocaleString('es-CL')}</td>
-      <td class="px-4 py-3 text-right text-slate-500">${p.peso_kg.toLocaleString('es-CL')} kg</td>
-      <td class="px-4 py-3 text-right text-slate-400 font-mono text-xs">${p.m3_x_kg.toFixed(4)}</td>
-      <td class="px-4 py-3 text-right text-slate-500 font-mono text-xs">${p.m3_producto.toFixed(4)}</td>
-      <td class="px-4 py-3 text-right font-mono text-xs ${m3Color}">${p.m3_totales.toFixed(4)}</td>
+      <td class="px-4 py-3 text-right">${stockBadge}</td>
     </tr>`;
   }).join('');
 }
@@ -337,8 +333,8 @@ function renderChartCategorias(data) {
     data: {
       labels: data.map(d => d.categoria.length > 18 ? d.categoria.slice(0,18)+'…' : d.categoria),
       datasets: [{
-        label: 'M³',
-        data: data.map(d => parseFloat(d.m3.toFixed(4))),
+        label: 'Unidades',
+        data: data.map(d => d.inventario),
         backgroundColor: COLORS,
         borderRadius: 6,
         borderSkipped: false
@@ -358,7 +354,7 @@ function renderChartCategorias(data) {
 
 let chartProd = null;
 async function renderChartTopProductos() {
-  const res = await fetch(`${API}/api/products?limit=15&sort=m3_totales&order=desc`);
+  const res = await fetch(`${API}/api/products?limit=15&sort=inventario&order=desc`);
   const d = await res.json();
   const ctx = document.getElementById('chart-productos').getContext('2d');
   if (chartProd) chartProd.destroy();
@@ -367,8 +363,8 @@ async function renderChartTopProductos() {
     data: {
       labels: d.data.map(p => p.nombre.length > 22 ? p.nombre.slice(0,22)+'…' : p.nombre),
       datasets: [{
-        label: 'M³ totales',
-        data: d.data.map(p => parseFloat(p.m3_totales.toFixed(4))),
+        label: 'Stock',
+        data: d.data.map(p => p.inventario),
         backgroundColor: '#6366f1',
         borderRadius: 4,
         borderSkipped: false
@@ -434,11 +430,11 @@ let syncEtaInterval = null;
 let syncRunId = null;
 let syncStartTime = null;
 let panelMinimized = false;
-const SYNC_ESTIMATED_SECS = 67;
+const SYNC_ESTIMATED_SECS = 30;
 
 const STEP_KEYS = {
   'Instalando dependencias':              'deps',
-  'Descargando inventario de logystix.co':'download',
+  'Leyendo inventario de Mercado Libre':  'download',
   'Publicando cambios':                   'publish',
 };
 

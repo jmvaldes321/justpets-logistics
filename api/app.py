@@ -34,9 +34,11 @@ def summary():
         por_categoria[cat]['inventario'] += p['inventario']
         por_categoria[cat]['productos'] += 1
 
+    con_stock = sum(1 for p in products if p['inventario'] > 0)
+
     categorias_lista = sorted(
         [{'categoria': k, **v} for k, v in por_categoria.items()],
-        key=lambda x: x['m3'],
+        key=lambda x: x['inventario'],
         reverse=True
     )
 
@@ -44,6 +46,7 @@ def summary():
         'total_m3': round(total_m3, 4),
         'total_inventario': total_inventario,
         'total_productos': total_productos,
+        'con_stock': con_stock,
         'por_categoria': categorias_lista
     })
 
@@ -98,8 +101,7 @@ STEP_LABELS = {
     "Post Setup Python":                None,
     "Complete job":                     None,
     "Install dependencias":             "Instalando dependencias",
-    "Ejecutar sync de inventario":      "Descargando inventario de logystix.co",
-    "Subir screenshots de debug (si hay error)": None,
+    "Ejecutar sync de inventario":      "Leyendo inventario de Mercado Libre",
     "Commit y push data.json actualizado": "Publicando cambios",
 }
 
