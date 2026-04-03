@@ -118,41 +118,41 @@
     <!-- KPIs -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="kpi-grid">
       <div class="card p-4 flex flex-col gap-1">
-        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Publicaciones activas</p>
-        <p class="text-2xl font-bold text-indigo-600" id="kpi-productos">—</p>
-        <p class="text-xs text-slate-400">artículos en Mercado Libre</p>
+        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Total M³</p>
+        <p class="text-2xl font-bold text-indigo-600" id="kpi-m3">—</p>
+        <p class="text-xs text-slate-400">metros cúbicos en bodega</p>
+      </div>
+      <div class="card p-4 flex flex-col gap-1">
+        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Productos</p>
+        <p class="text-2xl font-bold text-slate-700" id="kpi-productos">—</p>
+        <p class="text-xs text-slate-400">SKUs en planilla</p>
       </div>
       <div class="card p-4 flex flex-col gap-1">
         <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Con stock</p>
         <p class="text-2xl font-bold text-emerald-600" id="kpi-con-stock">—</p>
-        <p class="text-xs text-slate-400">publicaciones disponibles</p>
+        <p class="text-xs text-slate-400">productos con inventario > 0</p>
       </div>
       <div class="card p-4 flex flex-col gap-1">
         <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Unidades totales</p>
         <p class="text-2xl font-bold text-slate-700" id="kpi-inventario">—</p>
-        <p class="text-xs text-slate-400">unidades disponibles</p>
-      </div>
-      <div class="card p-4 flex flex-col gap-1">
-        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Categorías</p>
-        <p class="text-2xl font-bold text-slate-700" id="kpi-categorias">—</p>
-        <p class="text-xs text-slate-400">tipos de producto</p>
+        <p class="text-xs text-slate-400">unidades en Mercado Libre</p>
       </div>
     </div>
 
     <!-- Charts row -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <!-- Top 10 categorias -->
+      <!-- Top 15 productos por M3 -->
       <div class="card p-5">
-        <h2 class="text-sm font-semibold text-slate-700 mb-4">Top 10 categorías por unidades</h2>
-        <div class="relative h-72">
-          <canvas id="chart-categoria"></canvas>
-        </div>
-      </div>
-      <!-- Top 15 productos -->
-      <div class="card p-5">
-        <h2 class="text-sm font-semibold text-slate-700 mb-4">Top 15 publicaciones por stock</h2>
+        <h2 class="text-sm font-semibold text-slate-700 mb-4">Top 15 productos por M³</h2>
         <div class="relative h-72">
           <canvas id="chart-productos"></canvas>
+        </div>
+      </div>
+      <!-- Top 15 productos por inventario -->
+      <div class="card p-5">
+        <h2 class="text-sm font-semibold text-slate-700 mb-4">Top 15 productos por stock</h2>
+        <div class="relative h-72">
+          <canvas id="chart-categoria"></canvas>
         </div>
       </div>
     </div>
@@ -178,7 +178,9 @@
           </select>
           <!-- Sort -->
           <select id="sort-select" class="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+            <option value="m3_totales">Ordenar: M³ totales</option>
             <option value="inventario">Ordenar: Stock</option>
+            <option value="peso_kg">Ordenar: Peso</option>
             <option value="nombre">Ordenar: Nombre</option>
           </select>
         </div>
@@ -195,10 +197,12 @@
           <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
             <tr>
               <th class="px-4 py-3 text-left font-semibold">SKU</th>
-              <th class="px-4 py-3 text-left font-semibold">Publicación</th>
+              <th class="px-4 py-3 text-left font-semibold">Producto</th>
+              <th class="px-4 py-3 text-right font-semibold">Inventario</th>
               <th class="px-4 py-3 text-right font-semibold">Peso (kg)</th>
-              <th class="px-4 py-3 text-left font-semibold">Categoría</th>
-              <th class="px-4 py-3 text-right font-semibold">Stock</th>
+              <th class="px-4 py-3 text-right font-semibold">M³/kg</th>
+              <th class="px-4 py-3 text-right font-semibold">M³ producto</th>
+              <th class="px-4 py-3 text-right font-semibold">M³ totales</th>
             </tr>
           </thead>
           <tbody id="tabla-body" class="divide-y divide-slate-100"></tbody>
@@ -222,7 +226,7 @@ const API = window.location.hostname === 'localhost' ? 'http://localhost:5001' :
 let currentPage = 1;
 let currentCat = '';
 let currentSearch = '';
-let currentSort = 'inventario';
+let currentSort = 'm3_totales';
 let totalPages = 1;
 let searchTimer = null;
 
@@ -244,13 +248,13 @@ async function loadSummary() {
   const res = await fetch(`${API}/api/summary`);
   const d = await res.json();
 
+  document.getElementById('kpi-m3').textContent = d.total_m3.toLocaleString('es-CL', {minimumFractionDigits:2, maximumFractionDigits:2});
   document.getElementById('kpi-productos').textContent = d.total_productos.toLocaleString('es-CL');
   document.getElementById('kpi-con-stock').textContent = (d.con_stock || 0).toLocaleString('es-CL');
   document.getElementById('kpi-inventario').textContent = d.total_inventario.toLocaleString('es-CL');
-  document.getElementById('kpi-categorias').textContent = d.por_categoria.length;
 
-  renderChartCategorias(d.por_categoria.slice(0, 10));
-  renderChartTopProductos();
+  renderChartTopM3();
+  renderChartTopStock();
 }
 
 // --- Categories ---
@@ -299,61 +303,33 @@ async function loadProducts() {
 function renderTable(products) {
   const tbody = document.getElementById('tabla-body');
   if (!products.length) {
-    tbody.innerHTML = `<tr><td colspan="5" class="text-center py-12 text-slate-400 text-sm">Sin resultados</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center py-12 text-slate-400 text-sm">Sin resultados</td></tr>`;
     return;
   }
   tbody.innerHTML = products.map(p => {
-    const stockBadge = p.inventario > 0
-      ? `<span class="badge bg-emerald-50 text-emerald-700">${p.inventario.toLocaleString('es-CL')} uds</span>`
-      : `<span class="badge bg-red-50 text-red-500">Sin stock</span>`;
-    const peso = p.peso_kg > 0 ? `${p.peso_kg.toLocaleString('es-CL')} kg` : `<span class="text-slate-300">—</span>`;
+    const m3Color = p.m3_totales > 5 ? 'text-indigo-600 font-bold' : p.m3_totales > 1 ? 'text-slate-700 font-semibold' : 'text-slate-500';
+    const invCell = p.inventario > 0
+      ? `<span class="text-slate-700 font-semibold">${p.inventario.toLocaleString('es-CL')}</span>`
+      : `<span class="text-red-400">0</span>`;
     return `
     <tr class="hover:bg-slate-50 transition-colors">
       <td class="px-4 py-3 text-slate-400 font-mono text-xs">${p.sku}</td>
-      <td class="px-4 py-3 text-slate-700 font-medium max-w-sm">
-        <span title="${p.nombre}">${p.nombre.length > 55 ? p.nombre.slice(0,55)+'…' : p.nombre}</span>
+      <td class="px-4 py-3 text-slate-700 font-medium max-w-xs">
+        <span title="${p.nombre}">${p.nombre.length > 45 ? p.nombre.slice(0,45)+'…' : p.nombre}</span>
       </td>
-      <td class="px-4 py-3 text-right text-slate-500 text-sm">${peso}</td>
-      <td class="px-4 py-3">
-        <span class="badge bg-slate-100 text-slate-600">${p.categoria}</span>
-      </td>
-      <td class="px-4 py-3 text-right">${stockBadge}</td>
+      <td class="px-4 py-3 text-right">${invCell}</td>
+      <td class="px-4 py-3 text-right text-slate-500">${p.peso_kg > 0 ? p.peso_kg + ' kg' : '<span class="text-slate-300">—</span>'}</td>
+      <td class="px-4 py-3 text-right text-slate-400 font-mono text-xs">${p.m3_x_kg.toFixed(4)}</td>
+      <td class="px-4 py-3 text-right text-slate-500 font-mono text-xs">${p.m3_producto.toFixed(4)}</td>
+      <td class="px-4 py-3 text-right font-mono text-xs ${m3Color}">${p.m3_totales.toFixed(4)}</td>
     </tr>`;
   }).join('');
 }
 
 // --- Charts ---
-let chartCat = null;
-function renderChartCategorias(data) {
-  const ctx = document.getElementById('chart-categoria').getContext('2d');
-  if (chartCat) chartCat.destroy();
-  chartCat = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: data.map(d => d.categoria.length > 18 ? d.categoria.slice(0,18)+'…' : d.categoria),
-      datasets: [{
-        label: 'Unidades',
-        data: data.map(d => d.inventario),
-        backgroundColor: COLORS,
-        borderRadius: 6,
-        borderSkipped: false
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { grid: { display: false }, ticks: { font: { size: 10 } } },
-        y: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 } } }
-      }
-    }
-  });
-}
-
 let chartProd = null;
-async function renderChartTopProductos() {
-  const res = await fetch(`${API}/api/products?limit=15&sort=inventario&order=desc`);
+async function renderChartTopM3() {
+  const res = await fetch(`${API}/api/products?limit=15&sort=m3_totales&order=desc`);
   const d = await res.json();
   const ctx = document.getElementById('chart-productos').getContext('2d');
   if (chartProd) chartProd.destroy();
@@ -362,9 +338,40 @@ async function renderChartTopProductos() {
     data: {
       labels: d.data.map(p => p.nombre.length > 22 ? p.nombre.slice(0,22)+'…' : p.nombre),
       datasets: [{
+        label: 'M³',
+        data: d.data.map(p => parseFloat(p.m3_totales.toFixed(4))),
+        backgroundColor: '#6366f1',
+        borderRadius: 4,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 } } },
+        y: { grid: { display: false }, ticks: { font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+let chartStock = null;
+async function renderChartTopStock() {
+  const res = await fetch(`${API}/api/products?limit=15&sort=inventario&order=desc`);
+  const d = await res.json();
+  const ctx = document.getElementById('chart-categoria').getContext('2d');
+  if (chartStock) chartStock.destroy();
+  chartStock = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: d.data.map(p => p.nombre.length > 22 ? p.nombre.slice(0,22)+'…' : p.nombre),
+      datasets: [{
         label: 'Stock',
         data: d.data.map(p => p.inventario),
-        backgroundColor: '#6366f1',
+        backgroundColor: COLORS,
         borderRadius: 4,
         borderSkipped: false
       }]

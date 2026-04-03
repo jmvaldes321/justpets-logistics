@@ -38,7 +38,7 @@ def summary():
 
     categorias_lista = sorted(
         [{'categoria': k, **v} for k, v in por_categoria.items()],
-        key=lambda x: x['inventario'],
+        key=lambda x: x['m3'],
         reverse=True
     )
 

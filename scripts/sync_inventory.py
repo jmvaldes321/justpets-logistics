@@ -120,9 +120,8 @@ def get_items_detail(item_ids: list[str], access_token: str) -> list[dict]:
 def update_data_json(ml_items: list[dict]):
     """
     Actualiza api/data.json con el stock de ML.
-    - Productos existentes (por SKU o por ML item id): actualiza inventario.
-    - Items de ML sin match en data.json: se agregan como nuevos.
-    - Los valores de m3 existentes se preservan.
+    Solo actualiza inventario y m3_totales de productos existentes.
+    La planilla maestra es la fuente de verdad — nunca se agregan nuevos desde ML.
     """
     with open(DATA_PATH, "r", encoding="utf-8") as f:
         products = json.load(f)
@@ -131,51 +130,34 @@ def update_data_json(ml_items: list[dict]):
     by_sku   = {p["sku"]: p for p in products}
     by_ml_id = {p.get("ml_item_id"): p for p in products if p.get("ml_item_id")}
 
-    updated  = 0
-    added    = 0
+    updated     = 0
+    not_matched = 0
 
     for item in ml_items:
-        ml_id    = item.get("id", "")
-        sku      = str(item.get("seller_sku") or "").strip() or ml_id
-        title    = item.get("title", sku)
-        qty      = int(item.get("available_quantity") or 0)
-        category = item.get("category_id", "SIN CATEGORIA")
+        ml_id = item.get("id", "")
+        sku   = str(item.get("seller_sku") or "").strip() or ml_id
+        qty   = int(item.get("available_quantity") or 0)
 
-        # Buscar producto existente por SKU o ML ID
         product = by_sku.get(sku) or by_ml_id.get(ml_id)
 
         if product:
             old_qty = product["inventario"]
-            product["inventario"]  = qty
-            product["m3_totales"]  = round(product.get("m3_producto", 0) * qty, 6)
-            product["ml_item_id"]  = ml_id
+            product["inventario"] = qty
+            product["m3_totales"] = round(product.get("m3_producto", 0) * qty, 6)
+            product["ml_item_id"] = ml_id
             if old_qty != qty:
                 updated += 1
         else:
-            new_p = {
-                "sku":        sku,
-                "nombre":     title,
-                "inventario": qty,
-                "peso_kg":    0,
-                "m3_x_kg":    0,
-                "m3_producto": 0,
-                "m3_totales": 0,
-                "categoria":  category,
-                "ml_item_id": ml_id,
-            }
-            products.append(new_p)
-            by_sku[sku]     = new_p
-            by_ml_id[ml_id] = new_p
-            added += 1
+            not_matched += 1
 
     with open(DATA_PATH, "w", encoding="utf-8") as f:
         json.dump(products, f, ensure_ascii=False)
 
-    total_m3    = sum(p["m3_totales"] for p in products)
-    con_stock   = sum(1 for p in products if p["inventario"] > 0)
-    print(f"✓ data.json: {updated} actualizados, {added} nuevos agregados")
-    print(f"✓ Total SKUs: {len(products)}  |  Con stock > 0: {con_stock}")
-    print(f"✓ M³ total bodega: {total_m3:.4f}")
+    total_m3  = sum(p["m3_totales"] for p in products)
+    con_stock = sum(1 for p in products if p["inventario"] > 0)
+    print(f"✓ data.json: {updated} actualizados  |  {not_matched} de ML sin match en planilla")
+    print(f"✓ Total productos: {len(products)}  |  Con stock: {con_stock}")
+    print(f"✓ M³ total: {total_m3:.4f}")
 
 
 # ── Main ───────────────────────────────────────────────────────────────────
