@@ -108,39 +108,71 @@ async def download_report(download_dir: str) -> str:
         await page.screenshot(path="debug_reporte.png")
 
         # Seleccionar bodega "ebox layout"
+        # El campo Bodega puede ser un select nativo o un dropdown customizado (react-select, select2, etc.)
         print("→ Seleccionando bodega 'ebox layout'...")
-        # Buscar un select o dropdown con la bodega
-        selects = await page.locator("select").all()
         bodega_seleccionada = False
+
+        # 1. Intentar native <select>
+        selects = await page.locator("select").all()
         for sel in selects:
-            options = await sel.locator("option").all_text_contents()
-            for opt in options:
-                if "ebox" in opt.lower():
-                    await sel.select_option(label=opt)
-                    bodega_seleccionada = True
-                    print(f"✓ Bodega seleccionada: {opt}")
-                    break
+            try:
+                options = await sel.locator("option").all_text_contents()
+                for opt in options:
+                    if "ebox" in opt.lower():
+                        await sel.select_option(label=opt)
+                        bodega_seleccionada = True
+                        print(f"✓ Bodega (native select): {opt}")
+                        break
+            except Exception:
+                pass
             if bodega_seleccionada:
                 break
 
+        # 2. Si no es native select, buscar el campo "Bodega" por label y hacer click para abrir el dropdown
         if not bodega_seleccionada:
-            # Intentar con elementos clickeables que contengan "ebox"
             try:
-                await page.get_by_text("ebox", exact=False).first.click()
+                # Buscar el input del campo Bodega (puede tener placeholder o estar cerca del label)
+                bodega_field = page.locator("label:has-text('Bodega') ~ * input, input[placeholder*='odega'], [aria-label*='odega']").first
+                if not await bodega_field.is_visible():
+                    # Buscar contenedor del campo Bodega y clickear para abrir el dropdown
+                    bodega_container = page.locator("label:has-text('Bodega')").locator("..").first
+                    await bodega_container.click()
+                else:
+                    await bodega_field.click()
+                await page.wait_for_timeout(800)
+                # Hacer click en la opción que contenga "ebox"
+                await page.get_by_text("ebox", exact=False).first.click(timeout=5000)
                 bodega_seleccionada = True
-                print("✓ Bodega seleccionada via texto")
+                print("✓ Bodega (custom dropdown): ebox layout")
+            except Exception as e:
+                print(f"  Dropdown custom fallido: {e}")
+
+        # 3. Último recurso: click directo en el texto "ebox"
+        if not bodega_seleccionada:
+            try:
+                await page.get_by_text("ebox", exact=False).first.click(timeout=5000)
+                bodega_seleccionada = True
+                print("✓ Bodega (text click): ebox")
             except Exception:
-                await page.screenshot(path="bodega_error.png")
-                raise RuntimeError("No se encontró bodega 'ebox layout'. Ver bodega_error.png")
+                pass
+
+        if not bodega_seleccionada:
+            await page.screenshot(path="bodega_error.png")
+            all_texts = await page.locator("select option, [role='option'], li").all_text_contents()
+            raise RuntimeError(f"No se encontró bodega 'ebox layout'. Opciones: {[t for t in all_texts if t.strip()][:20]}")
+
+        await page.screenshot(path="step5_bodega_selected.png")
 
         # Generar reporte
         print("→ Generando reporte...")
         try:
-            await page.get_by_text("Generar reporte", exact=False).first.click()
+            await page.get_by_text("Generar Reporte", exact=False).first.click()
             await page.wait_for_load_state("networkidle", timeout=60000)
+            await page.wait_for_timeout(3000)
         except PlaywrightTimeout:
             await page.screenshot(path="generar_error.png")
             raise RuntimeError("Timeout al generar reporte. Ver generar_error.png")
+        await page.screenshot(path="step6_reporte_generado.png")
         print("✓ Reporte generado")
 
         # Descargar Excel
