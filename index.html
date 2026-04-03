@@ -1,10 +1,357 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>JustPets Logistics</title>
+  <title>JustPets Logistics — Bodega</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; background: #f1f5f9; }
+    .card { background: white; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+    table th { position: sticky; top: 0; z-index: 1; }
+    .spinner { border: 3px solid #e2e8f0; border-top-color: #6366f1; border-radius: 50%; width: 28px; height: 28px; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  </style>
 </head>
-<body>
+<body class="min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0v10l-8 4m0-10L4 7m8 10V7"/>
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-base font-semibold text-slate-800 leading-none">JustPets Logistics</h1>
+        <p class="text-xs text-slate-400 mt-0.5">Control de bodega — metros cúbicos</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="text-xs text-slate-400">Actualizado:</span>
+      <span id="last-update" class="text-xs font-medium text-slate-600">—</span>
+    </div>
+  </header>
+
+  <main class="max-w-screen-xl mx-auto px-4 py-6 space-y-6">
+
+    <!-- KPIs -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="kpi-grid">
+      <div class="card p-4 flex flex-col gap-1">
+        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Total M³ bodega</p>
+        <p class="text-2xl font-bold text-indigo-600" id="kpi-m3">—</p>
+        <p class="text-xs text-slate-400">metros cúbicos totales</p>
+      </div>
+      <div class="card p-4 flex flex-col gap-1">
+        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Productos distintos</p>
+        <p class="text-2xl font-bold text-slate-700" id="kpi-productos">—</p>
+        <p class="text-xs text-slate-400">SKUs únicos</p>
+      </div>
+      <div class="card p-4 flex flex-col gap-1">
+        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Unidades totales</p>
+        <p class="text-2xl font-bold text-slate-700" id="kpi-inventario">—</p>
+        <p class="text-xs text-slate-400">unidades en bodega</p>
+      </div>
+      <div class="card p-4 flex flex-col gap-1">
+        <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Categorías</p>
+        <p class="text-2xl font-bold text-slate-700" id="kpi-categorias">—</p>
+        <p class="text-xs text-slate-400">tipos de producto</p>
+      </div>
+    </div>
+
+    <!-- Charts row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <!-- Top 10 categorias -->
+      <div class="card p-5">
+        <h2 class="text-sm font-semibold text-slate-700 mb-4">M³ por categoría (top 10)</h2>
+        <div class="relative h-72">
+          <canvas id="chart-categoria"></canvas>
+        </div>
+      </div>
+      <!-- Top 15 productos -->
+      <div class="card p-5">
+        <h2 class="text-sm font-semibold text-slate-700 mb-4">Top 15 productos por M³</h2>
+        <div class="relative h-72">
+          <canvas id="chart-productos"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabla de productos -->
+    <div class="card">
+      <div class="p-5 border-b border-slate-100 flex flex-col md:flex-row md:items-center gap-3">
+        <div class="flex-1">
+          <h2 class="text-sm font-semibold text-slate-700">Inventario detallado</h2>
+          <p class="text-xs text-slate-400 mt-0.5" id="tabla-info">Cargando...</p>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-2">
+          <!-- Buscador -->
+          <div class="relative">
+            <svg class="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+            <input id="search-input" type="text" placeholder="Buscar producto o SKU..." class="pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg w-56 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+          </div>
+          <!-- Filtro categoría -->
+          <select id="cat-filter" class="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+            <option value="">Todas las categorías</option>
+          </select>
+          <!-- Sort -->
+          <select id="sort-select" class="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+            <option value="m3_totales">Ordenar: M³ totales</option>
+            <option value="inventario">Ordenar: Inventario</option>
+            <option value="peso_kg">Ordenar: Peso</option>
+            <option value="nombre">Ordenar: Nombre</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Loading -->
+      <div id="tabla-loading" class="flex justify-center items-center py-16">
+        <div class="spinner"></div>
+      </div>
+
+      <!-- Table -->
+      <div id="tabla-container" class="overflow-x-auto hidden">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+            <tr>
+              <th class="px-4 py-3 text-left font-semibold">SKU / EAN</th>
+              <th class="px-4 py-3 text-left font-semibold">Producto</th>
+              <th class="px-4 py-3 text-left font-semibold">Categoría</th>
+              <th class="px-4 py-3 text-right font-semibold">Inventario</th>
+              <th class="px-4 py-3 text-right font-semibold">Peso (kg)</th>
+              <th class="px-4 py-3 text-right font-semibold">M³/kg</th>
+              <th class="px-4 py-3 text-right font-semibold">M³ producto</th>
+              <th class="px-4 py-3 text-right font-semibold">M³ totales</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-body" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+
+      <!-- Paginación -->
+      <div id="paginacion" class="px-5 py-4 border-t border-slate-100 flex items-center justify-between hidden">
+        <p class="text-xs text-slate-400" id="pag-info"></p>
+        <div class="flex gap-2">
+          <button id="btn-prev" class="px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">← Anterior</button>
+          <button id="btn-next" class="px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Siguiente →</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+<script>
+const API = window.location.hostname === 'localhost' ? 'http://localhost:5001' : '';
+let currentPage = 1;
+let currentCat = '';
+let currentSearch = '';
+let currentSort = 'm3_totales';
+let totalPages = 1;
+let searchTimer = null;
+
+const COLORS = [
+  '#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981',
+  '#3b82f6','#ef4444','#14b8a6','#f97316','#84cc16',
+  '#06b6d4','#a855f7','#e11d48','#d97706','#059669'
+];
+
+// --- Init ---
+async function init() {
+  document.getElementById('last-update').textContent = new Date().toLocaleDateString('es-CL', {day:'2-digit',month:'short',year:'numeric'});
+  await Promise.all([loadSummary(), loadCategories()]);
+  await loadProducts();
+}
+
+// --- Summary ---
+async function loadSummary() {
+  const res = await fetch(`${API}/api/summary`);
+  const d = await res.json();
+
+  document.getElementById('kpi-m3').textContent = d.total_m3.toLocaleString('es-CL', {minimumFractionDigits:2, maximumFractionDigits:2});
+  document.getElementById('kpi-productos').textContent = d.total_productos.toLocaleString('es-CL');
+  document.getElementById('kpi-inventario').textContent = d.total_inventario.toLocaleString('es-CL');
+  document.getElementById('kpi-categorias').textContent = d.por_categoria.length;
+
+  renderChartCategorias(d.por_categoria.slice(0, 10));
+  renderChartTopProductos();
+}
+
+// --- Categories ---
+async function loadCategories() {
+  const res = await fetch(`${API}/api/categories`);
+  const cats = await res.json();
+  const sel = document.getElementById('cat-filter');
+  cats.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c;
+    opt.textContent = c;
+    sel.appendChild(opt);
+  });
+}
+
+// --- Products table ---
+async function loadProducts() {
+  document.getElementById('tabla-loading').classList.remove('hidden');
+  document.getElementById('tabla-container').classList.add('hidden');
+  document.getElementById('paginacion').classList.add('hidden');
+
+  const params = new URLSearchParams({
+    page: currentPage,
+    limit: 50,
+    sort: currentSort,
+    order: currentSort === 'nombre' ? 'asc' : 'desc'
+  });
+  if (currentCat) params.set('categoria', currentCat);
+  if (currentSearch) params.set('search', currentSearch);
+
+  const res = await fetch(`${API}/api/products?${params}`);
+  const d = await res.json();
+  totalPages = d.pages;
+
+  renderTable(d.data);
+  document.getElementById('tabla-info').textContent = `${d.total.toLocaleString('es-CL')} productos encontrados`;
+  document.getElementById('pag-info').textContent = `Página ${d.page} de ${d.pages} — ${d.total} resultados`;
+  document.getElementById('btn-prev').disabled = d.page <= 1;
+  document.getElementById('btn-next').disabled = d.page >= d.pages;
+
+  document.getElementById('tabla-loading').classList.add('hidden');
+  document.getElementById('tabla-container').classList.remove('hidden');
+  document.getElementById('paginacion').classList.remove('hidden');
+}
+
+function renderTable(products) {
+  const tbody = document.getElementById('tabla-body');
+  if (!products.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center py-12 text-slate-400 text-sm">Sin resultados</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = products.map(p => {
+    const m3Color = p.m3_totales > 5 ? 'text-indigo-600 font-bold' : p.m3_totales > 1 ? 'text-slate-700 font-semibold' : 'text-slate-500';
+    return `
+    <tr class="hover:bg-slate-50 transition-colors">
+      <td class="px-4 py-3 text-slate-400 font-mono text-xs">${p.sku}</td>
+      <td class="px-4 py-3 text-slate-700 font-medium max-w-xs">
+        <span title="${p.nombre}">${p.nombre.length > 45 ? p.nombre.slice(0,45)+'…' : p.nombre}</span>
+      </td>
+      <td class="px-4 py-3">
+        <span class="badge bg-slate-100 text-slate-600">${p.categoria}</span>
+      </td>
+      <td class="px-4 py-3 text-right text-slate-600">${p.inventario.toLocaleString('es-CL')}</td>
+      <td class="px-4 py-3 text-right text-slate-500">${p.peso_kg.toLocaleString('es-CL')} kg</td>
+      <td class="px-4 py-3 text-right text-slate-400 font-mono text-xs">${p.m3_x_kg.toFixed(4)}</td>
+      <td class="px-4 py-3 text-right text-slate-500 font-mono text-xs">${p.m3_producto.toFixed(4)}</td>
+      <td class="px-4 py-3 text-right font-mono text-xs ${m3Color}">${p.m3_totales.toFixed(4)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// --- Charts ---
+let chartCat = null;
+function renderChartCategorias(data) {
+  const ctx = document.getElementById('chart-categoria').getContext('2d');
+  if (chartCat) chartCat.destroy();
+  chartCat = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: data.map(d => d.categoria.length > 18 ? d.categoria.slice(0,18)+'…' : d.categoria),
+      datasets: [{
+        label: 'M³',
+        data: data.map(d => parseFloat(d.m3.toFixed(4))),
+        backgroundColor: COLORS,
+        borderRadius: 6,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+        y: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+let chartProd = null;
+async function renderChartTopProductos() {
+  const res = await fetch(`${API}/api/products?limit=15&sort=m3_totales&order=desc`);
+  const d = await res.json();
+  const ctx = document.getElementById('chart-productos').getContext('2d');
+  if (chartProd) chartProd.destroy();
+  chartProd = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: d.data.map(p => p.nombre.length > 22 ? p.nombre.slice(0,22)+'…' : p.nombre),
+      datasets: [{
+        label: 'M³ totales',
+        data: d.data.map(p => parseFloat(p.m3_totales.toFixed(4))),
+        backgroundColor: '#6366f1',
+        borderRadius: 4,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 } } },
+        y: { grid: { display: false }, ticks: { font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+// --- Events ---
+document.getElementById('cat-filter').addEventListener('change', e => {
+  currentCat = e.target.value;
+  currentPage = 1;
+  loadProducts();
+});
+
+document.getElementById('sort-select').addEventListener('change', e => {
+  currentSort = e.target.value;
+  currentPage = 1;
+  loadProducts();
+});
+
+document.getElementById('search-input').addEventListener('input', e => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    currentSearch = e.target.value;
+    currentPage = 1;
+    loadProducts();
+  }, 350);
+});
+
+document.getElementById('btn-prev').addEventListener('click', () => {
+  if (currentPage > 1) { currentPage--; loadProducts(); }
+});
+
+document.getElementById('btn-next').addEventListener('click', () => {
+  if (currentPage < totalPages) { currentPage++; loadProducts(); }
+});
+
+// Start
+init().catch(err => {
+  console.error(err);
+  document.getElementById('tabla-loading').innerHTML = `
+    <div class="text-center py-12">
+      <p class="text-red-500 font-medium text-sm">No se pudo conectar a la API</p>
+      <p class="text-slate-400 text-xs mt-1">Asegúrate de que el servidor esté corriendo en <code>localhost:5001</code></p>
+      <p class="text-slate-400 text-xs mt-1">Ejecuta: <code class="bg-slate-100 px-2 py-0.5 rounded">cd api && python app.py</code></p>
+    </div>`;
+});
+</script>
 </body>
 </html>
