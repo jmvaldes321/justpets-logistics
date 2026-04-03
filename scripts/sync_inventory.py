@@ -108,58 +108,58 @@ async def download_report(download_dir: str) -> str:
         await page.screenshot(path="debug_reporte.png")
 
         # Seleccionar bodega "ebox layout"
-        # El campo Bodega puede ser un select nativo o un dropdown customizado (react-select, select2, etc.)
+        # El campo usa Select2 (data-select2-id) — el native <select> está oculto,
+        # hay que interactuar con la UI de Select2.
         print("→ Seleccionando bodega 'ebox layout'...")
         bodega_seleccionada = False
 
-        # 1. Intentar native <select>
-        selects = await page.locator("select").all()
-        for sel in selects:
-            try:
-                options = await sel.locator("option").all_text_contents()
-                for opt in options:
-                    if "ebox" in opt.lower():
-                        await sel.select_option(label=opt)
-                        bodega_seleccionada = True
-                        print(f"✓ Bodega (native select): {opt}")
-                        break
-            except Exception:
-                pass
-            if bodega_seleccionada:
-                break
+        # 1. Forzar selección en el native <select> con JS y disparar evento change de Select2
+        try:
+            selected = await page.evaluate("""() => {
+                const selects = document.querySelectorAll('select');
+                for (const sel of selects) {
+                    for (const opt of sel.options) {
+                        if (opt.text.toLowerCase().includes('ebox')) {
+                            sel.value = opt.value;
+                            sel.dispatchEvent(new Event('change', { bubbles: true }));
+                            // Trigger Select2 change event if available
+                            if (window.jQuery && window.jQuery(sel).data('select2')) {
+                                window.jQuery(sel).trigger('change');
+                            }
+                            return opt.text;
+                        }
+                    }
+                }
+                return null;
+            }""")
+            if selected:
+                bodega_seleccionada = True
+                print(f"✓ Bodega (JS + Select2): {selected.strip()}")
+                await page.wait_for_timeout(500)
+        except Exception as e:
+            print(f"  JS select fallido: {e}")
 
-        # 2. Si no es native select, buscar el campo "Bodega" por label y hacer click para abrir el dropdown
+        # 2. Si JS no funcionó, interactuar con el UI de Select2
         if not bodega_seleccionada:
             try:
-                # Buscar el input del campo Bodega (puede tener placeholder o estar cerca del label)
-                bodega_field = page.locator("label:has-text('Bodega') ~ * input, input[placeholder*='odega'], [aria-label*='odega']").first
-                if not await bodega_field.is_visible():
-                    # Buscar contenedor del campo Bodega y clickear para abrir el dropdown
-                    bodega_container = page.locator("label:has-text('Bodega')").locator("..").first
-                    await bodega_container.click()
-                else:
-                    await bodega_field.click()
-                await page.wait_for_timeout(800)
-                # Hacer click en la opción que contenga "ebox"
-                await page.get_by_text("ebox", exact=False).first.click(timeout=5000)
+                # Abrir el dropdown de Select2 (contenedor visible)
+                await page.locator(".select2-selection, .select2-container").first.click()
+                await page.wait_for_timeout(600)
+                # Buscar el campo de búsqueda dentro del dropdown abierto
+                search_input = page.locator(".select2-search__field")
+                if await search_input.is_visible():
+                    await search_input.fill("ebox")
+                    await page.wait_for_timeout(400)
+                # Hacer click en la opción visible
+                await page.locator(".select2-results__option:has-text('ebox')").first.click(timeout=5000)
                 bodega_seleccionada = True
-                print("✓ Bodega (custom dropdown): ebox layout")
+                print("✓ Bodega (Select2 UI): ebox layout")
             except Exception as e:
-                print(f"  Dropdown custom fallido: {e}")
-
-        # 3. Último recurso: click directo en el texto "ebox"
-        if not bodega_seleccionada:
-            try:
-                await page.get_by_text("ebox", exact=False).first.click(timeout=5000)
-                bodega_seleccionada = True
-                print("✓ Bodega (text click): ebox")
-            except Exception:
-                pass
+                print(f"  Select2 UI fallido: {e}")
 
         if not bodega_seleccionada:
             await page.screenshot(path="bodega_error.png")
-            all_texts = await page.locator("select option, [role='option'], li").all_text_contents()
-            raise RuntimeError(f"No se encontró bodega 'ebox layout'. Opciones: {[t for t in all_texts if t.strip()][:20]}")
+            raise RuntimeError("No se pudo seleccionar la bodega 'ebox layout'. Ver bodega_error.png")
 
         await page.screenshot(path="step5_bodega_selected.png")
 
