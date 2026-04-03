@@ -60,16 +60,36 @@ async def download_report(download_dir: str) -> str:
             raise RuntimeError("Login fallido — el formulario sigue visible. Ver step3_after_login.png")
         print("✓ Login exitoso")
 
+        # Esperar a que el sidebar cargue completamente
+        await page.wait_for_timeout(4000)
+        await page.screenshot(path="step3b_dashboard_loaded.png")
+
+        # Dump de todos los textos visibles del sidebar para debugging
+        all_links = await page.locator("a, [role='menuitem'], nav span, aside span, .menu-item, li a").all_text_contents()
+        menu_texts = [t.strip() for t in all_links if t.strip()]
+        print(f"  Textos del menú: {menu_texts[:40]}")
+
         # Navegar a Reporte de Inventarios → Reporte Consolidado
-        # El menú puede llamarse "Reporte de Inventario" o "Reportes de Inventario"
         print("→ Navegando a Reporte consolidado de inventarios...")
-        try:
-            await page.get_by_text("Reporte de Inventario", exact=False).first.click(timeout=10000)
-            await page.wait_for_load_state("networkidle")
-            await page.wait_for_timeout(1500)
-        except PlaywrightTimeout:
+        # Probar múltiples variantes del texto del menú
+        nav1_options = ["Reportes de Inventario", "Reporte de Inventario", "Inventario"]
+        nav1_clicked = False
+        for text in nav1_options:
+            try:
+                locator = page.get_by_text(text, exact=False).first
+                if await locator.is_visible():
+                    await locator.click(timeout=5000)
+                    await page.wait_for_load_state("networkidle")
+                    await page.wait_for_timeout(1500)
+                    nav1_clicked = True
+                    print(f"✓ Clic en '{text}'")
+                    break
+            except Exception:
+                continue
+
+        if not nav1_clicked:
             await page.screenshot(path="nav_error.png")
-            raise RuntimeError("No se encontró 'Reporte de Inventario' en el menú. Ver nav_error.png")
+            raise RuntimeError(f"No se encontró ninguna opción de menú de inventario. Textos disponibles: {menu_texts[:30]}")
 
         await page.screenshot(path="step4_menu_inventario.png")
 
@@ -78,8 +98,11 @@ async def download_report(download_dir: str) -> str:
             await page.wait_for_load_state("networkidle")
             await page.wait_for_timeout(1500)
         except PlaywrightTimeout:
+            # Tomar screenshot y mostrar textos disponibles
+            all_texts = await page.locator("a, button, li").all_text_contents()
+            available = [t.strip() for t in all_texts if t.strip()]
             await page.screenshot(path="nav2_error.png")
-            raise RuntimeError("No se encontró 'Reporte consolidado'. Ver nav2_error.png")
+            raise RuntimeError(f"No se encontró 'Reporte consolidado'. Textos disponibles: {available[:30]}")
 
         print("✓ En página de reporte consolidado")
         await page.screenshot(path="debug_reporte.png")
