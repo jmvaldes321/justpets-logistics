@@ -113,27 +113,29 @@ def _gh_headers():
 
 @app.route('/api/sync/trigger', methods=['POST'])
 def sync_trigger():
-    if not os.environ.get("GITHUB_PAT"):
-        return jsonify({'error': 'GITHUB_PAT no configurado en las variables de entorno de Vercel'}), 500
+    try:
+        if not os.environ.get("GITHUB_PAT"):
+            return jsonify({'error': 'GITHUB_PAT no configurado'}), 500
 
-    resp = http_requests.post(
-        f"https://api.github.com/repos/{GITHUB_REPO}/actions/workflows/{GITHUB_WORKFLOW}/dispatches",
-        headers=_gh_headers(),
-        json={"ref": "main"},
-        timeout=10
-    )
-    if resp.status_code != 204:
-        return jsonify({'error': f'GitHub API error: {resp.text}'}), resp.status_code
+        resp = http_requests.post(
+            f"https://api.github.com/repos/{GITHUB_REPO}/actions/workflows/{GITHUB_WORKFLOW}/dispatches",
+            headers=_gh_headers(),
+            json={"ref": "main"},
+            timeout=15
+        )
+        if resp.status_code != 204:
+            return jsonify({'error': f'GitHub API: {resp.status_code} {resp.text}'}), 502
 
-    # Esperar brevemente a que el run se registre
-    time.sleep(3)
-    runs_resp = http_requests.get(
-        f"https://api.github.com/repos/{GITHUB_REPO}/actions/runs?event=workflow_dispatch&per_page=1",
-        headers=_gh_headers(), timeout=10
-    )
-    runs = runs_resp.json().get('workflow_runs', [])
-    run_id = runs[0]['id'] if runs else None
-    return jsonify({'run_id': run_id, 'ok': True})
+        time.sleep(4)
+        runs_resp = http_requests.get(
+            f"https://api.github.com/repos/{GITHUB_REPO}/actions/runs?event=workflow_dispatch&per_page=1",
+            headers=_gh_headers(), timeout=10
+        )
+        runs = runs_resp.json().get('workflow_runs', [])
+        run_id = runs[0]['id'] if runs else None
+        return jsonify({'run_id': run_id, 'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/sync/status')
