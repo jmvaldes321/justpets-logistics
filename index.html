@@ -47,7 +47,7 @@
     </div>
   </header>
 
-  <!-- Panel de progreso del sync -->
+  <!-- Panel de progreso del sync (modal) -->
   <div id="sync-panel" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
       <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
@@ -55,14 +55,23 @@
           <h3 class="text-base font-semibold text-slate-800">Sincronizando inventario</h3>
           <p class="text-xs text-slate-400 mt-0.5">Conectando con logystix.co — bodega ebox layout</p>
         </div>
-        <button id="btn-close-panel" onclick="closePanel()" class="hidden text-slate-400 hover:text-slate-600">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-          </svg>
-        </button>
+        <div class="flex items-center gap-2">
+          <!-- Minimizar -->
+          <button onclick="minimizePanel()" title="Minimizar"
+            class="text-slate-400 hover:text-slate-600 w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4"/>
+            </svg>
+          </button>
+          <!-- Cerrar (solo visible en error) -->
+          <button id="btn-close-panel" onclick="closePanel()" class="hidden text-slate-400 hover:text-slate-600 w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
       </div>
       <div class="px-6 py-5 space-y-3">
-        <!-- Steps -->
         <div id="sync-steps" class="space-y-2.5">
           <div class="sync-step flex items-center gap-3" data-key="queue">
             <div class="step-icon w-6 h-6 rounded-full border-2 border-slate-200 flex items-center justify-center flex-shrink-0"></div>
@@ -81,10 +90,20 @@
             <span class="text-sm text-slate-500">Publicando cambios</span>
           </div>
         </div>
-        <!-- Status message -->
         <div id="sync-result" class="hidden mt-3 px-4 py-3 rounded-xl text-sm font-medium"></div>
       </div>
     </div>
+  </div>
+
+  <!-- Pill flotante cuando está minimizado -->
+  <div id="sync-pill" class="hidden fixed bottom-5 right-5 z-50">
+    <button onclick="restorePanel()"
+      class="flex items-center gap-2.5 pl-3 pr-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-full shadow-lg transition-colors text-sm font-medium">
+      <svg id="pill-icon" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+      </svg>
+      <span id="pill-label">Sincronizando...</span>
+    </button>
   </div>
 
   <main class="max-w-screen-xl mx-auto px-4 py-6 space-y-6">
@@ -405,6 +424,7 @@ init().catch(err => {
 // --- Sync manual ---
 let syncPollInterval = null;
 let syncRunId = null;
+let panelMinimized = false;
 
 const STEP_KEYS = {
   'Instalando dependencias':              'deps',
@@ -413,7 +433,7 @@ const STEP_KEYS = {
 };
 
 function openPanel() {
-  // Reset UI
+  panelMinimized = false;
   document.querySelectorAll('.sync-step').forEach(el => {
     el.querySelector('.step-icon').innerHTML = '';
     el.querySelector('.step-icon').className = 'step-icon w-6 h-6 rounded-full border-2 border-slate-200 flex items-center justify-center flex-shrink-0';
@@ -421,11 +441,26 @@ function openPanel() {
   });
   document.getElementById('sync-result').classList.add('hidden');
   document.getElementById('btn-close-panel').classList.add('hidden');
+  document.getElementById('sync-pill').classList.add('hidden');
+  document.getElementById('sync-panel').classList.remove('hidden');
+}
+
+function minimizePanel() {
+  panelMinimized = true;
+  document.getElementById('sync-panel').classList.add('hidden');
+  document.getElementById('sync-pill').classList.remove('hidden');
+}
+
+function restorePanel() {
+  panelMinimized = false;
+  document.getElementById('sync-pill').classList.add('hidden');
   document.getElementById('sync-panel').classList.remove('hidden');
 }
 
 function closePanel() {
   document.getElementById('sync-panel').classList.add('hidden');
+  document.getElementById('sync-pill').classList.add('hidden');
+  panelMinimized = false;
   if (syncPollInterval) { clearInterval(syncPollInterval); syncPollInterval = null; }
 }
 
@@ -497,10 +532,20 @@ async function pollStatus(runId) {
       clearInterval(syncPollInterval); syncPollInterval = null;
       if (d.conclusion === 'success') {
         setStepState('publish', 'success');
-        showResult('success', '¡Inventario actualizado! Recargando datos...');
-        setTimeout(() => { closePanel(); init(); resetBtn(); }, 3000);
+        // Actualizar pill si está minimizado
+        document.getElementById('pill-icon').classList.remove('animate-spin');
+        document.getElementById('pill-label').textContent = '✓ Inventario actualizado';
+        // Auto-cierre: si está visible cerrar en 2s, si minimizado cerrar en 4s
+        const delay = panelMinimized ? 4000 : 2000;
+        if (!panelMinimized) {
+          showResult('success', '¡Inventario actualizado!');
+        }
+        setTimeout(() => { closePanel(); init(); resetBtn(); }, delay);
       } else {
-        showResult('error', 'El workflow terminó con errores. Revisa GitHub Actions para más detalles.');
+        document.getElementById('pill-label').textContent = '✗ Error en sync';
+        document.getElementById('pill-icon').classList.remove('animate-spin');
+        if (!panelMinimized) restorePanel();
+        showResult('error', 'El workflow terminó con errores. Revisa GitHub Actions.');
         document.getElementById('btn-close-panel').classList.remove('hidden');
         resetBtn();
       }
