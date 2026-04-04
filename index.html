@@ -497,8 +497,8 @@ function renderTable(products) {
       <td class="px-4 py-3 text-right text-slate-500 font-mono text-xs">${p.m3_producto.toFixed(4)}</td>
       <td class="px-4 py-3 text-right font-mono text-xs ${m3Color}">${p.m3_totales.toFixed(4)}</td>
       <td class="px-4 py-3 text-right">
-        <button data-sku="${p.sku}"
-          class="edit-btn p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Editar">
+        <button type="button" onclick="openEditModal(loadedProducts[${i}])"
+          class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Editar">
           <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
           </svg>
@@ -612,12 +612,6 @@ function recalcEditPreviews() {
 document.getElementById('edit-peso').addEventListener('input',  recalcEditPreviews);
 document.getElementById('edit-m3xkg').addEventListener('input', recalcEditPreviews);
 
-document.getElementById('tabla-body').addEventListener('click', e => {
-  const btn = e.target.closest('.edit-btn');
-  if (!btn) return;
-  const p = loadedProducts.find(x => x.sku === btn.dataset.sku);
-  if (p) openEditModal(p);
-});
 
 // Start
 init().catch(err => {
