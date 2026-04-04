@@ -140,6 +140,16 @@
             <input id="edit-m3xkg" type="number" step="0.0001" min="0" required class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 font-mono"/>
           </div>
         </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-slate-50 rounded-lg px-4 py-2.5">
+            <p class="text-xs text-slate-400">M³ producto <span class="text-slate-300">= peso × M³/kg</span></p>
+            <span id="edit-m3prod-preview" class="font-mono text-sm font-semibold text-slate-700">—</span>
+          </div>
+          <div class="bg-indigo-50 rounded-lg px-4 py-2.5">
+            <p class="text-xs text-slate-400">M³ totales <span class="text-slate-300">= producto × inventario</span></p>
+            <span id="edit-m3totales-preview" class="font-mono text-sm font-bold text-indigo-600">—</span>
+          </div>
+        </div>
         <div id="edit-error" class="hidden px-4 py-2 bg-red-50 text-red-600 text-sm rounded-lg"></div>
         <div class="flex justify-end gap-3 pt-2">
           <button type="button" onclick="closeEditModal()" class="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Cancelar</button>
@@ -589,6 +599,17 @@ document.getElementById('btn-next').addEventListener('click', () => {
   if (currentPage < totalPages) { currentPage++; loadProducts(); }
 });
 
+function recalcEditPreviews() {
+  const peso  = parseFloat(document.getElementById('edit-peso').value)  || 0;
+  const m3xkg = parseFloat(document.getElementById('edit-m3xkg').value) || 0;
+  const inv   = parseFloat(document.getElementById('edit-form').dataset.inventario) || 0;
+  const m3prod = peso * m3xkg;
+  document.getElementById('edit-m3prod-preview').textContent    = m3prod.toFixed(6);
+  document.getElementById('edit-m3totales-preview').textContent = (m3prod * inv).toFixed(4);
+}
+document.getElementById('edit-peso').addEventListener('input',  recalcEditPreviews);
+document.getElementById('edit-m3xkg').addEventListener('input', recalcEditPreviews);
+
 document.getElementById('tabla-body').addEventListener('click', e => {
   const btn = e.target.closest('.edit-btn');
   if (btn) openEditModal(JSON.parse(btn.dataset.edit));
@@ -801,6 +822,7 @@ function openEditModal(p) {
   document.getElementById('edit-m3prod').value = p.m3_producto;
   document.getElementById('edit-form').dataset.inventario = p.inventario;
   document.getElementById('edit-error').classList.add('hidden');
+  recalcEditPreviews();
   document.getElementById('edit-modal').classList.remove('hidden');
 }
 
