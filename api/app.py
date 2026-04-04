@@ -121,10 +121,10 @@ def update_product(sku):
         p['peso_kg'] = float(body['peso_kg'])
     if 'm3_x_kg' in body:
         p['m3_x_kg'] = float(body['m3_x_kg'])
-    if 'm3_producto' in body:
-        p['m3_producto'] = float(body['m3_producto'])
 
-    p['m3_totales'] = round(p['m3_producto'] * p['inventario'], 6)
+    # m3_producto siempre es resultado de la fórmula
+    p['m3_producto'] = round(p['peso_kg'] * p['m3_x_kg'], 6)
+    p['m3_totales']  = round(p['m3_producto'] * p['inventario'], 6)
 
     with open(DATA_PATH, 'w', encoding='utf-8') as f:
         json.dump(products, f, ensure_ascii=False)
